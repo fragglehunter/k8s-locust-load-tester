@@ -1,51 +1,46 @@
 #!/usr/bin/env bash
 
-set -ev
+set -euo pipefail
 
-if [[ -z "$GROUP" ]] ; then
-    echo "Cannot find GROUP env var"
-    exit 1
-fi
-
-if [[ -z "$COMMIT" ]] ; then
-    echo "Cannot find COMMIT env var"
-    exit 1
-fi
-
-push() {
-    DOCKER_PUSH=1;
-    while [ $DOCKER_PUSH -gt 0 ] ; do
-        echo "Pushing $1";
-        docker push $1;
-        DOCKER_PUSH=$(echo $?);
-        if [[ "$DOCKER_PUSH" -gt 0 ]] ; then
-            echo "Docker push failed with exit code $DOCKER_PUSH";
-        fi;
-    done;
+# Logging functions
+log_info() {
+  echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $1"
 }
 
-tag_and_push_all() {
-    if [[ -z "$1" ]] ; then
-        echo "Please pass the tag"
-        exit 1
-    else
-        TAG=$1
-    fi
-    DOCKER_REPO=${GROUP}/${REPO}
-    if [[ "$COMMIT" != "$TAG" ]]; then
-        echo "Tagging docker release"
-        docker tag ${DOCKER_REPO}:${COMMIT} ${DOCKER_REPO}:${TAG}
-    fi
-    push "$DOCKER_REPO:$TAG";
+log_error() {
+  echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $1" >&2
 }
 
-# Push snapshot when in master
-if [ "$TRAVIS_BRANCH" == "master" ] && [ "$TRAVIS_PULL_REQUEST" == "false" ]; then
-    tag_and_push_all master-${COMMIT:0:8}
-fi;
+# Usage help
+usage() {
+  echo "Usage: $0 <image-repo> <image-name> <image-tag>"
+  echo "Example: $0 ghcr.io/yourorg my-app v1.0.0"
+  exit 1
+}
 
-# Push tag and latest when tagged
-if [ -n "$TRAVIS_TAG" ]; then
-    tag_and_push_all ${TRAVIS_TAG}
-    tag_and_push_all latest
-fi;
+# Validate args
+if [[ $# -ne 3 ]]; then
+  log_error "Invalid number of arguments"
+  usage
+fi
+
+IMAGE_REPO="$1"
+IMAGE_NAME="$2"
+IMAGE_TAG="$3"
+FULL_IMAGE="${IMAGE_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+log_info "Building Docker image: ${FULL_IMAGE}"
+if docker build -t "$FULL_IMAGE" .; then
+  log_info "Docker image built successfully."
+else
+  log_error "Failed to build Docker image."
+  exit 1
+fi
+
+log_info "Pushing Docker image: ${FULL_IMAGE}"
+if docker push "$FULL_IMAGE"; then
+  log_info "Docker image pushed successfully."
+else
+  log_error "Failed to push Docker image."
+  exit 1
+fi

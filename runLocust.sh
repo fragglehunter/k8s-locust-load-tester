@@ -1,102 +1,106 @@
 #!/bin/bash
 ###################################################################################################################
-#Purpose: Run Locust Load test
-#Created on: 12.26.24
-#Updated on: 12.26.24
-#Made with Love by: Phil Henderson
-#Version 1.10
+# Purpose: Run Locust Load test
+# Created on: 12.26.24
+# Updated on: 04.24.25
+# Made with Love by: Phil Henderson
+# Version 1.11
 ###################################################################################################################
-ARGS="$@"
-HOST="${1}"
-SCRIPT_NAME=`basename "$0"`
+
+SCRIPT_NAME=$(basename "$0")
 INITIAL_DELAY=1
-TARGET_HOST="$HOST"
-#CLIENTS=2
-#REQUESTS=10
-
-
-do_check() {
-
-  # check hostname is not empty
-  if [ "${TARGET_HOST}x" == "x" ]; then
-    echo "TARGET_HOST is not set; use '-h hostname:port'"
-    exit 1
-  fi
-
-  # check for locust
-  if [ ! `command -v locust` ]; then
-    echo "Python 'locust' package is not found!"
-    exit 1
-  fi
-
-  # check locust file is present
-  if [ -n "${LOCUST_FILE:+1}" ]; then
-  	echo "Locust file: $LOCUST_FILE"
-  else
-  	LOCUST_FILE="locustfile.py" 
-  	echo "Default Locust file: $LOCUST_FILE" 
-  fi
-}
-
-do_exec() {
-  sleep $INITIAL_DELAY
-
-  # check if host is running
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${TARGET_HOST}) 
-  if [ $STATUS -ne 200 ]; then
-      echo "${TARGET_HOST} is not accessible"
-      exit 1
-  fi
-
-  echo "Will run $LOCUST_FILE against $TARGET_HOST. Spawning $CLIENTS clients and $REQUESTS total requests."
-  locust --host=http://$TARGET_HOST -f $LOCUST_FILE --clients=$CLIENTS --hatch-rate=5 --num-request=$REQUESTS --no-web --only-summary
-  echo "done"
-}
+# Default values will be overridden if passed via flags
+: "${CLIENTS:=2}"
+: "${REQUESTS:=10}"
+: "${HATCH_RATE:=5}"
 
 do_usage() {
-    cat >&2 <<EOF
+  cat >&2 <<EOF
 Usage:
-  ${SCRIPT_NAME} [ hostname ] OPTIONS
+  ${SCRIPT_NAME} -h hostname [OPTIONS]
 
 Options:
-  -d  Delay before starting
-  -h  Target host url, e.g. http://localhost/
-  -c  Number of clients (default 2)
-  -r  Number of requests (default 10)
+  -d  Delay before starting (in seconds, default: 1)
+  -h  Target host URL, e.g. http://localhost/
+  -c  Number of clients (default: 2)
+  -r  Number of requests (default: 10)
+
+Environment Variables:
+  WEB_UI=true     Enables Locust Web UI instead of running headlessly.
 
 Description:
-  Runs a Locust load simulation against specified host.
-
+  Runs a Locust load simulation against the specified host.
 EOF
   exit 1
 }
 
+do_check() {
+  if [ -z "$TARGET_HOST" ]; then
+    echo "[ERROR] TARGET_HOST is not set; use '-h hostname:port'"
+    exit 1
+  fi
 
+  if ! command -v locust &> /dev/null; then
+    echo "[ERROR] Python 'locust' package is not found!"
+    exit 1
+  fi
 
-while getopts ":d:h:c:r:" o; do
-  case "${o}" in
+  if [ -n "${LOCUST_FILE:+1}" ]; then
+    echo "[INFO] Locust file: $LOCUST_FILE"
+  else
+    LOCUST_FILE="locustfile.py"
+    echo "[INFO] Default Locust file: $LOCUST_FILE"
+  fi
+}
+
+do_exec() {
+  sleep "$INITIAL_DELAY"
+
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${TARGET_HOST}")
+  if [ "$STATUS" -ne 200 ]; then
+    echo "[ERROR] ${TARGET_HOST} is not accessible (HTTP $STATUS)"
+    exit 1
+  fi
+
+  echo "[INFO] Running $LOCUST_FILE against $TARGET_HOST with $CLIENTS clients and $REQUESTS requests."
+
+  LOCUST_CMD="locust --host=http://${TARGET_HOST} -f ${LOCUST_FILE} --clients=${CLIENTS} --hatch-rate=${HATCH_RATE} --num-request=${REQUESTS}"
+
+  if [ "${WEB_UI}" != "true" ]; then
+    LOCUST_CMD="$LOCUST_CMD --no-web --only-summary"
+  fi
+
+  echo "[INFO] Executing: $LOCUST_CMD"
+  eval "$LOCUST_CMD"
+
+  echo "[INFO] Done"
+}
+
+# Parse command-line options
+while getopts ":d:h:c:r:" opt; do
+  case "${opt}" in
     d)
-        INITIAL_DELAY=${OPTARG}
-        #echo $INITIAL_DELAY
-        ;;
+      INITIAL_DELAY=${OPTARG}
+      ;;
     h)
-        TARGET_HOST=${OPTARG}
-        #echo $TARGET_HOST
-        ;;
+      TARGET_HOST=${OPTARG}
+      ;;
     c)
-        CLIENTS=${OPTARG:-2}
-        #echo $CLIENTS
-        ;;
+      CLIENTS=${OPTARG}
+      ;;
     r)
-        REQUESTS=${OPTARG:-10}
-        #echo $REQUESTS
-        ;;
+      REQUESTS=${OPTARG}
+      ;;
     *)
-        do_usage
-        ;;
+      do_usage
+      ;;
   esac
 done
 
+# Show usage if no arguments are passed
+if [ "$OPTIND" -eq 1 ]; then
+  do_usage
+fi
 
 do_check
 do_exec
