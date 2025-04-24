@@ -97,10 +97,10 @@ while getopts ":d:h:c:r:" opt; do
   esac
 done
 
-# Show usage if no arguments are passed
-if [ "$OPTIND" -eq 1 ]; then
-  do_usage
-fi
+## Show usage if no arguments are passed
+#if [ "$OPTIND" -eq 1 ]; then
+#  do_usage
+#fi
 
 do_check
 do_exec
