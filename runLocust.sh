@@ -64,7 +64,7 @@ do_exec() {
 
   echo "[INFO] Running $LOCUST_FILE against $TARGET_HOST with $CLIENTS clients and $REQUESTS requests."
 
-  LOCUST_CMD="locust --host=http://${TARGET_HOST} -f ${LOCUST_FILE} --clients=${CLIENTS} --hatch-rate=${HATCH_RATE} --num-request=${REQUESTS}"
+  LOCUST_CMD="locust --host=http://${TARGET_HOST} -f /config/${LOCUST_FILE} --clients=${CLIENTS} --hatch-rate=${HATCH_RATE} --num-request=${REQUESTS}"
 
   if [ "${WEB_UI}" != "true" ]; then
     LOCUST_CMD="$LOCUST_CMD --no-web --only-summary"
