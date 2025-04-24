@@ -10,9 +10,9 @@
 SCRIPT_NAME=$(basename "$0")
 INITIAL_DELAY=1
 # Default values will be overridden if passed via flags
-: "${CLIENTS:=2}"
+: "${USERS:=2}"
 : "${REQUESTS:=10}"
-: "${HATCH_RATE:=5}"
+: "${SPAWN_RATE:=5}"
 
 do_usage() {
   cat >&2 <<EOF
@@ -62,9 +62,9 @@ do_exec() {
     exit 1
   fi
 
-  echo "[INFO] Running $LOCUST_FILE against $TARGET_HOST with $CLIENTS clients and $REQUESTS requests."
+  echo "[INFO] Running $LOCUST_FILE against $TARGET_HOST with $USERS clients and $REQUESTS requests."
 
-  LOCUST_CMD="locust --host=http://${TARGET_HOST} -f /config/${LOCUST_FILE} --clients=${CLIENTS} --hatch-rate=${HATCH_RATE} --num-request=${REQUESTS}"
+  LOCUST_CMD="locust --host=${TARGET_HOST} -f /config/${LOCUST_FILE} --users=${USERS} --spawn-rate=${SPAWN_RATE}"
 
   if [ "${WEB_UI}" != "true" ]; then
     LOCUST_CMD="$LOCUST_CMD --no-web --only-summary"
@@ -86,7 +86,7 @@ while getopts ":d:h:c:r:" opt; do
       TARGET_HOST=${OPTARG}
       ;;
     c)
-      CLIENTS=${OPTARG}
+      USERS=${OPTARG}
       ;;
     r)
       REQUESTS=${OPTARG}

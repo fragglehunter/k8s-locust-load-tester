@@ -13,8 +13,8 @@ set -e
 CONFIGMAP_NAME="locust-loadtest-cm"
 DEPLOYMENT_NAME="locust-loadtest"
 NAMESPACE="default"
-HATCH_RATE="5"
-RUN_TIME="5m"
+SPAWN_RATE="5"
+USERS="5m"
 TARGET_HOST="http://my-service:8080"
 LOCUSTFILE_PATH="locustfile.py"
 IMAGE="locust-load-test:v2.0"
@@ -41,8 +41,8 @@ Options:
   -i IMAGE           Locust Docker image (default: locustio/locust:2.25.0)
   -f LOCUSTFILE      Path to locustfile.py (default: locustfile.py)
   -h TARGET_HOST        Target host (default: http://my-service:8080)
-  -r HATCH_RATE      Spawn rate (default: 5)
-  -t RUN_TIME        Run time (default: 5m)
+  -r SPAWN_RATE      Spawn rate (default: 5)
+  -t USERS        Run time (default: 5m)
   --help             Show this help
 
 Example:
@@ -60,8 +60,8 @@ while [[ $# -gt 0 ]]; do
     -i) IMAGE="$2"; shift 2 ;;
     -f) LOCUSTFILE_PATH="$2"; shift 2 ;;
     -h) TARGET_HOST="$2"; shift 2 ;;
-    -r) HATCH_RATE="$2"; shift 2 ;;
-    -t) RUN_TIME="$2"; shift 2 ;;
+    -r) SPAWN_RATE="$2"; shift 2 ;;
+    -t) USERS="$2"; shift 2 ;;
     --help) usage ;;
     *) log_error "Unknown option: $1"; usage ;;
   esac
@@ -83,8 +83,8 @@ log_info "Creating ConfigMap '$CONFIGMAP_NAME' in namespace '$NAMESPACE'..."
 
 kubectl create configmap "$CONFIGMAP_NAME" \
   --from-file=locustfile.py="$LOCUSTFILE_PATH" \
-  --from-literal=hatchrate="$HATCH_RATE" \
-  --from-literal=run-time="$RUN_TIME" \
+  --from-literal=hatchrate="$SPAWN_RATE" \
+  --from-literal=users="$USERS" \
   --from-literal=targethost="$TARGET_HOST" \
   -n "$NAMESPACE" --dry-run=client -o yaml > $CONFIGMAP_NAME.yaml
 
@@ -117,16 +117,16 @@ spec:
             configMapKeyRef:
               name: $CONFIGMAP_NAME
               key: targethost
-        - name: HATCH_RATE
+        - name: SPAWN_RATE
           valueFrom:
             configMapKeyRef:
               name: $CONFIGMAP_NAME
               key: hatchrate
-        - name: RUN_TIME
+        - name: USERS
           valueFrom:
             configMapKeyRef:
               name: $CONFIGMAP_NAME
-              key: run-time
+              key: users
         - name: WEB_UI
           value: "$WEB_UI"
         volumeMounts:
