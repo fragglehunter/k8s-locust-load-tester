@@ -1,0 +1,130 @@
+---
+# Publishes the Helm chart twice, from one source of truth:
+#   1. a GitHub Release per chart version + index.yaml on the gh-pages branch,
+#      which is the classic `helm repo add` experience, and
+#   2. an OCI artifact at oci://ghcr.io/fragglehunter/charts, which is how Helm
+#      3.8+ prefers to distribute charts and needs no Pages site at all.
+#
+# Both are free on a public repo and both use only GITHUB_TOKEN.
+#
+# Action version policy: floating major tags, bumped by .github/dependabot.yaml.
+# Full-SHA pins are the more supply-chain-hardened option if you want them later.
+name: Release chart
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'charts/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two releases racing would fight over the gh-pages index. Queue instead of
+# cancelling: a half-finished release is worse than a slow one.
+concurrency:
+  group: chart-release
+  cancel-in-progress: false
+
+env:
+  OCI_REPO: oci://ghcr.io/fragglehunter/charts
+
+jobs:
+  release:
+    name: chart-releaser + OCI push
+    runs-on: ubuntu-latest
+    permissions:
+      # Creates GitHub Releases and pushes index.yaml to the gh-pages branch.
+      contents: write
+      # helm push to ghcr.io.
+      packages: write
+      #
+      # Deliberately NOT requested: `pages: write` and `id-token: write`. Those
+      # are for the actions/deploy-pages artifact flow. chart-releaser publishes
+      # by committing to the gh-pages branch, which is plain `contents: write`,
+      # and GitHub rebuilds the Pages site from that branch on its own.
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # cr needs the full history to work out which chart versions are new.
+          fetch-depth: 0
+
+      # cr commits index.yaml, so git needs an author.
+      - name: Configure git
+        run: |
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+
+      - uses: azure/setup-helm@v5
+
+      # Idempotent by construction: skip_existing means a re-run with an unchanged
+      # Chart.yaml version finds the release already there and moves on instead of
+      # failing. That matters because this workflow fires on every push touching
+      # charts/**, including README and comment changes that do not warrant a
+      # version bump.
+      - name: Run chart-releaser
+        id: cr
+        uses: helm/chart-releaser-action@v1
+        with:
+          charts_dir: charts
+          skip_existing: true
+        env:
+          CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to GHCR for Helm
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "${GHCR_TOKEN}" \
+            | helm registry login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+
+      # Not gated on steps.cr.outputs.changed_charts on purpose: if a previous run
+      # cut the GitHub Release but died before the OCI push, gating would make the
+      # gap permanent -- re-running the workflow would decide there was nothing to
+      # do. Asking the registry what it already has is the honest check, and makes
+      # a re-run with an unchanged version a no-op rather than an error.
+      - name: Push chart packages to GHCR (OCI)
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          rm -rf .oci-packages
+          mkdir -p .oci-packages
+          for chart_dir in charts/*/; do
+            helm package "${chart_dir}" --destination .oci-packages
+          done
+
+          pushed=0
+          skipped=0
+          for pkg in .oci-packages/*.tgz; do
+            metadata=$(helm show chart "${pkg}")
+            name=$(awk '$1 == "name:" { print $2; exit }' <<< "${metadata}")
+            version=$(awk '$1 == "version:" { print $2; exit }' <<< "${metadata}")
+
+            if helm show chart "${OCI_REPO}/${name}" --version "${version}" > /dev/null 2>&1; then
+              echo "${name} ${version} is already published to ${OCI_REPO}; skipping."
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            echo "Pushing ${name} ${version} to ${OCI_REPO}"
+            helm push "${pkg}" "${OCI_REPO}"
+            pushed=$((pushed + 1))
+          done
+
+          {
+            echo "### Chart release"
+            echo
+            echo "- released by chart-releaser: \`${CHANGED_CHARTS:-none}\`"
+            echo "- pushed to ${OCI_REPO}: ${pushed}"
+            echo "- already present, skipped: ${skipped}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+        env:
+          CHANGED_CHARTS: ${{ steps.cr.outputs.changed_charts }}
+
+      - name: Log out of GHCR
+        if: always()
+        run: helm registry logout ghcr.io || true

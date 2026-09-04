@@ -1,0 +1,67 @@
+{{- $ns := .Release.Namespace -}}
+{{- $fullName := include "locust-load-tester.fullname" . -}}
+{{- $selector := printf "app.kubernetes.io/instance=%s" .Release.Name -}}
+{{- if eq .Values.mode "distributed" -}}
+{{- $selector = printf "%s,app.kubernetes.io/component=master" $selector -}}
+{{- end -}}
+{{- /* Strip scheme, path and port so the hostname can be sanity-checked. A bare
+       name or a "svc.namespace" pair is in-cluster; a public TLD or three-plus
+       labels that are not a cluster suffix almost certainly is not. */ -}}
+{{- /* regexReplaceAll takes (regex, input, replacement) - it must not be piped. */ -}}
+{{- $targetName := regexReplaceAll "^[a-zA-Z][a-zA-Z0-9+.-]*://" (.Values.locust.targetHost | toString) "" -}}
+{{- $targetName = $targetName | splitList "/" | first | splitList ":" | first -}}
+{{- $isIP := regexMatch "^([0-9]{1,3}\\.){3}[0-9]{1,3}$" $targetName -}}
+{{- $inCluster := or (hasSuffix ".svc" $targetName) (hasSuffix ".cluster.local" $targetName) (hasSuffix ".local" $targetName) -}}
+{{- $publicTLD := regexMatch "\\.(com|net|org|io|co|dev|ai|app|cloud|sh|xyz|eu|us|uk|de|fr|nl|au|ca|jp|cn|in|br|gov|edu|info|biz|me)$" $targetName -}}
+{{- $external := and (not $isIP) (not $inCluster) (or $publicTLD (ge (len (splitList "." $targetName)) 3)) -}}
+Locust {{ .Chart.AppVersion }} installed as "{{ .Release.Name }}" in namespace "{{ $ns }}".
+
+  Mode:   {{ .Values.mode }} / {{ .Values.workload.kind }}{{ if eq .Values.mode "distributed" }} ({{ .Values.worker.replicaCount }} workers){{ end }}
+  Target: {{ .Values.locust.targetHost }}
+  Load:   {{ .Values.locust.users }} users, spawn rate {{ .Values.locust.spawnRate }}/s{{ with .Values.locust.runTime }}, run time {{ . }}{{ else }}, no run time limit{{ end }}
+{{- if $external }}
+
+WARNING: "{{ $targetName }}" does not look like an in-cluster Service. Make sure you
+are authorised to load test it before the run starts.
+{{- end }}
+{{- if and .Values.service.enabled .Values.locust.headless }}
+
+WARNING: service.enabled is true but locust.headless is true as well, so nothing is
+listening on the web port. Set locust.headless=false to use the Service.
+{{- end }}
+
+Follow the run:
+{{- if eq .Values.workload.kind "CronJob" }}
+  kubectl get jobs -n {{ $ns }} -l {{ $selector }}
+{{- end }}
+  kubectl logs -f -n {{ $ns }} -l {{ $selector }} --tail=100
+{{- if .Values.service.enabled }}
+
+Web UI:
+{{- if .Values.ingress.enabled }}
+{{- $scheme := ternary "https" "http" (gt (len .Values.ingress.tls) 0) }}
+{{- range $h := .Values.ingress.hosts }}{{ range $h.paths }}
+  {{ $scheme }}://{{ $h.host }}{{ .path }}
+{{- end }}{{ end }}
+{{- else if eq .Values.service.type "NodePort" }}
+  NODE_PORT=$(kubectl get svc -n {{ $ns }} {{ $fullName }} -o jsonpath='{.spec.ports[0].nodePort}')
+  NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
+  echo "http://$NODE_IP:$NODE_PORT"
+{{- else if eq .Values.service.type "LoadBalancer" }}
+  kubectl get svc -n {{ $ns }} {{ $fullName }} -w   # wait for EXTERNAL-IP, then browse to it
+{{- else }}
+  kubectl port-forward -n {{ $ns }} svc/{{ $fullName }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  # then open http://127.0.0.1:{{ .Values.service.port }}
+{{- end }}
+{{- else if not .Values.locust.headless }}
+
+The web UI is running in the pod but not exposed. Set service.enabled=true, or:
+  kubectl port-forward -n {{ $ns }} $(kubectl get pod -n {{ $ns }} -l {{ $selector }} -o name | head -1) 8089:8089
+{{- end }}
+{{- if eq .Values.mode "distributed" }}
+
+Scale the workers (they attach to the running master):
+  kubectl scale -n {{ $ns }} deployment/{{ include "locust-load-tester.workerFullname" . }} --replicas=5
+{{- end }}
+
+Stop everything: helm uninstall {{ .Release.Name }} -n {{ $ns }}

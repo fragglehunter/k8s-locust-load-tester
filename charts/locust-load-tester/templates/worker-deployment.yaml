@@ -1,0 +1,22 @@
+{{- if eq .Values.mode "distributed" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "locust-load-tester.workerFullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "locust-load-tester.labels" . | nindent 4 }}
+    {{- include "locust-load-tester.componentLabel" "worker" | nindent 4 }}
+  {{- with (include "locust-load-tester.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "locust-load-tester.selectorLabels" . | nindent 6 }}
+      {{- include "locust-load-tester.componentLabel" "worker" | nindent 6 }}
+  template:
+    {{- include "locust-load-tester.podTemplate" (dict "ctx" $ "role" "worker") | nindent 4 }}
+{{- end }}

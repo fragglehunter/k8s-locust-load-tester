@@ -1,0 +1,80 @@
+# ct: chart-testing values — web UI exposed through a Service and an Ingress.
+# Covers: headless=false with autostart, the Service on 8089, an Ingress object
+# (no controller is required for the manifest to be accepted), a named
+# ServiceAccount with annotations, and extraEnv passed to the container.
+#
+# The web UI keeps serving after runTime elapses — locust only quits early with
+# --autoquit — so the pod stays Ready for the whole `helm install --wait`.
+
+mode: standalone
+
+locust:
+  targetHost: http://kube-dns.kube-system.svc.cluster.local:9153
+  users: 4
+  spawnRate: 2
+  runTime: 1m
+  headless: false
+  autostart: true
+  loglevel: INFO
+
+workload:
+  kind: Deployment
+
+service:
+  enabled: true
+  type: ClusterIP
+  port: 8089
+  annotations:
+    ct.helm.sh/permutation: webui
+  labels:
+    locust.io/ui: "true"
+
+ingress:
+  enabled: true
+  # Left empty on purpose: a bare kind cluster has no IngressClass, and pinning a
+  # missing class is the one thing that would make this manifest unschedulable.
+  className: ""
+  annotations:
+    ct.helm.sh/permutation: webui
+  hosts:
+    - host: locust.ct.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false
+  annotations:
+    ct.helm.sh/permutation: webui
+
+extraEnv:
+  - name: LOCUST_CT_PERMUTATION
+    value: webui
+
+podLabels:
+  locust.io/role: standalone
+
+commonAnnotations:
+  ct.helm.sh/values-file: webui-values.yaml
+
+locustfile:
+  name: locustfile.py
+  content: |-
+    from locust import HttpUser, between, task
+
+
+    class CoreDNSMetricsUser(HttpUser):
+        wait_time = between(1.0, 2.0)
+
+        @task
+        def metrics(self):
+            self.client.get("/metrics", name="GET /metrics")
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 96Mi
+  limits:
+    memory: 256Mi

@@ -1,0 +1,32 @@
+# Patterns to ignore when building packages.
+# Matched against the chart directory, one pattern per line, .gitignore syntax.
+
+# VCS
+.git/
+.gitignore
+.github/
+.gitmodules
+
+# macOS / editor cruft
+.DS_Store
+*.swp
+*.bak
+*.orig
+*~
+.idea/
+.vscode/
+
+# CI
+.circleci/
+.travis.yml
+.gitlab-ci.yml
+
+# Python leftovers from locustfiles developed next to the chart
+__pycache__/
+*.py[cod]
+.venv/
+
+# Packaging output and test scaffolding that must not ship inside the .tgz
+*.tgz
+ci/
+OWNERS

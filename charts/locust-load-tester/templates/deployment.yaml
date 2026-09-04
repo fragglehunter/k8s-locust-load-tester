@@ -1,0 +1,24 @@
+{{- /* Sits outside the conditional so bad value combos fail on every render,
+       whatever workload kind or mode is selected. */ -}}
+{{- include "locust-load-tester.validateValues" . -}}
+{{- if and (eq .Values.workload.kind "Deployment") (eq .Values.mode "standalone") }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "locust-load-tester.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "locust-load-tester.labels" . | nindent 4 }}
+    {{- include "locust-load-tester.componentLabel" "standalone" | nindent 4 }}
+  {{- with (include "locust-load-tester.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "locust-load-tester.selectorLabels" . | nindent 6 }}
+  template:
+    {{- include "locust-load-tester.podTemplate" (dict "ctx" $ "role" "standalone") | nindent 4 }}
+{{- end }}

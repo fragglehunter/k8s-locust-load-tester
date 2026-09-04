@@ -1,0 +1,33 @@
+{{- if .Values.service.enabled }}
+{{- $annotations := merge (dict) (.Values.service.annotations | default dict) (fromYaml (include "locust-load-tester.annotations" .)) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "locust-load-tester.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "locust-load-tester.labels" . | nindent 4 }}
+    {{- with .Values.service.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with $annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: web
+      port: {{ .Values.service.port }}
+      targetPort: web
+      protocol: TCP
+      {{- if and (eq .Values.service.type "NodePort") .Values.service.nodePort }}
+      nodePort: {{ .Values.service.nodePort }}
+      {{- end }}
+  selector:
+    {{- include "locust-load-tester.selectorLabels" . | nindent 4 }}
+    {{- /* Only the master serves the web UI when the run is distributed. */}}
+    {{- if eq .Values.mode "distributed" }}
+    {{- include "locust-load-tester.componentLabel" "master" | nindent 4 }}
+    {{- end }}
+{{- end }}

@@ -1,0 +1,104 @@
+---
+# Distributed run: one master, four workers.
+#
+# Reach for this when a single pod can no longer saturate the target -- one Locust
+# process is bounded by one core, so past roughly a few thousand requests a second
+# you are measuring your own client. The master coordinates and aggregates; the
+# workers generate the traffic and dial the master on a headless Service on 5557.
+#
+#   helm install big-loadtest oci://ghcr.io/fragglehunter/charts/locust-load-tester \
+#     -f examples/distributed-values.yaml
+#
+#   kubectl logs -f -l app.kubernetes.io/instance=big-loadtest,app.kubernetes.io/component=master
+#
+# Workers can be scaled while the test runs -- they attach to the live master:
+#   kubectl scale deployment/big-loadtest-locust-load-tester-worker --replicas=8
+
+mode: distributed
+
+locust:
+  targetHost: http://dotnet-8-app:5000
+  # CLUSTER TOTALS, not per worker. The master splits these across the workers, so
+  # this is 2000 users spread over four pods, ramping at 100/s overall.
+  users: 2000
+  spawnRate: 100
+  runTime: 15m
+  headless: true
+  onlySummary: true
+  loglevel: INFO
+  stopTimeout: 30
+  # The master blocks until this many workers have checked in, so the ramp starts at
+  # full strength instead of piling everything on whichever worker booted first.
+  # Left empty it defaults to worker.replicaCount; it is spelled out here because
+  # that coupling is the thing worth seeing in an example.
+  expectWorkers: 4
+
+  csv:
+    enabled: true
+    prefix: /tmp/locust
+    fullHistory: true
+
+# mode: distributed requires Deployment -- there is no master to coordinate a Job.
+workload:
+  kind: Deployment
+
+worker:
+  replicaCount: 4
+  # Workers do all the actual work, so they get the resources. The master aggregates
+  # statistics and falls back to the top-level `resources` block below.
+  resources:
+    requests:
+      cpu: "1"
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  podLabels:
+    locust.io/role: worker
+  # Spread the workers over nodes: four load generators sharing one node's network
+  # queue measure that node, not the target.
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: locust-load-tester
+          app.kubernetes.io/component: worker
+
+locustfile:
+  name: locustfile.py
+  # The test from locustfile-dotnet-app.py at the repository root. Any of the
+  # locustfiles in this repo work here -- the file is distributed to every worker
+  # through the same ConfigMap.
+  content: |-
+    import base64
+
+    import requests
+    requests.packages.urllib3.disable_warnings()
+
+    from locust import HttpUser, TaskSet, task
+    from random import randint, choice
+    base64.encodestring = base64.encodebytes
+
+    class WebTasks(TaskSet):
+
+        @task
+        def load(self):
+            self.client.verify = False
+
+            self.client.get("/test")
+            self.client.get("/health")
+
+    class Web(HttpUser):
+        tasks = [WebTasks]
+        min_wait = 0
+        max_wait = 0
+
+# Master only: it aggregates statistics from four workers rather than generating
+# load itself.
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    memory: 1Gi

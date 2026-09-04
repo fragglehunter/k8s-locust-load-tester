@@ -1,0 +1,44 @@
+{{- if .Values.ingress.enabled }}
+{{- if not .Values.service.enabled }}
+{{- fail "ingress.enabled requires service.enabled: true - there is no Service for the Ingress to route to" }}
+{{- end }}
+{{- $fullName := include "locust-load-tester.fullname" . }}
+{{- $svcPort := .Values.service.port }}
+{{- $annotations := merge (dict) (.Values.ingress.annotations | default dict) (fromYaml (include "locust-load-tester.annotations" .)) }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "locust-load-tester.labels" . | nindent 4 }}
+  {{- with $annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path | quote }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ $fullName }}
+                port:
+                  number: {{ $svcPort }}
+          {{- end }}
+      {{- with .host }}
+      host: {{ . | quote }}
+      {{- end }}
+    {{- end }}
+{{- end }}

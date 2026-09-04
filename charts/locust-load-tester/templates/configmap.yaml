@@ -1,0 +1,21 @@
+{{- if not .Values.locustfile.existingConfigMap }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "locust-load-tester.configMapName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "locust-load-tester.labels" . | nindent 4 }}
+  {{- with (include "locust-load-tester.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+data:
+  {{- /* Literal block scalars: python indentation has to survive verbatim. */}}
+  {{ .Values.locustfile.name | quote }}: |-
+    {{- .Values.locustfile.content | toString | nindent 4 }}
+  {{- range $name, $content := .Values.locustfile.extraFiles }}
+  {{ $name | quote }}: |-
+    {{- $content | toString | nindent 4 }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,230 @@
+# Default values for locust-load-tester.
+# Every key is documented; see README.md for the rendered reference table.
+
+# -- Topology. `standalone` runs one self-contained Locust process (what you want
+# for most tests). `distributed` runs a master plus `worker.replicaCount` workers,
+# for when a single pod can no longer saturate the target.
+mode: standalone
+
+image:
+  # -- Container registry. Set to your Harbor host to pull from there instead.
+  registry: ghcr.io
+  # -- Image repository, without the registry prefix.
+  repository: fragglehunter/k8s-locust-load-tester
+  # -- Image tag. Defaults to `Chart.AppVersion` when empty.
+  tag: ""
+  # -- Pin by digest (`sha256:...`). Takes precedence over `tag` when set.
+  digest: ""
+  pullPolicy: IfNotPresent
+
+# -- Secrets for pulling from a private registry, e.g. `[{name: harbor-creds}]`.
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# -- Labels added to every rendered object.
+commonLabels: {}
+# -- Annotations added to every rendered object.
+commonAnnotations: {}
+
+locust:
+  # -- REQUIRED. Target under test, e.g. `http://dotnet-8-app:5000`.
+  targetHost: ""
+  # -- Peak concurrent simulated users (`--users`).
+  users: 10
+  # -- Users started per second until `users` is reached (`--spawn-rate`).
+  spawnRate: 5
+  # -- Stop after this long, e.g. `5m`, `1h30m`. Empty runs until the pod is deleted.
+  runTime: ""
+  # -- Run without the web UI (`--headless`). Set false to drive the test from the browser.
+  headless: true
+  # -- Serve the web UI but start the test immediately (`--autostart`). Requires `headless: false`.
+  autostart: false
+  # -- Suppress per-interval stats and print only the final summary (`--only-summary`).
+  onlySummary: false
+  # -- Locust log level: DEBUG, INFO, WARNING, ERROR, CRITICAL.
+  loglevel: INFO
+  # -- Process exit code when any request failed (`--exit-code-on-error`).
+  # Locust's default is 1, which means a single 404 fails the pod: a Job goes to
+  # Failed, a Deployment goes to CrashLoopBackOff. That is right for a smoke test
+  # gating a pipeline, and wrong for a soak test against a target you already know
+  # returns errors under load. Set 0 to make the run report success regardless.
+  exitCodeOnError: 1
+  # -- Seconds to wait for tasks to finish on shutdown (`--stop-timeout`).
+  stopTimeout: ""
+  # -- Only run tasks carrying these @tag names (`--tags`).
+  tags: []
+  # -- Skip tasks carrying these @tag names (`--exclude-tags`).
+  excludeTags: []
+  # -- In distributed mode, wait for this many workers before starting (`--expect-workers`).
+  # Defaults to `worker.replicaCount` when empty.
+  expectWorkers: ""
+
+  csv:
+    # -- Write `*_stats.csv` / `*_failures.csv` (`--csv`).
+    enabled: false
+    # -- Path prefix for the CSV files. Must be under a writable mount, e.g. `/tmp`.
+    prefix: /tmp/locust
+    # -- Also write a full stats history row per interval (`--csv-full-history`).
+    fullHistory: false
+
+  # -- Write an HTML report to this path on completion (`--html`). Must be writable.
+  htmlReport: ""
+
+  waitForHost:
+    # -- Poll `locust.targetHost` before starting so the test does not report
+    # connection errors while the target is still rolling out.
+    enabled: false
+    # -- Give up (and start anyway) after this many seconds.
+    timeout: 60
+    # -- Require this exact HTTP status. Empty accepts any HTTP response.
+    expectStatus: ""
+
+  # -- Restart the run when Locust exits successfully. Only meaningful with
+  # `workload.kind: Deployment` and a non-empty `runTime` — this is the modern
+  # equivalent of the old `while true; do locust ...; done` wrapper.
+  loop: false
+
+  # -- pip packages installed into /tmp at container start, e.g. `[locust-plugins]`.
+  # Requires `securityContext.readOnlyRootFilesystem: true` only because they land
+  # in an emptyDir; no image rebuild needed.
+  extraPipPackages: []
+
+  # -- Extra flags appended verbatim to the locust command line.
+  extraArgs: []
+
+locustfile:
+  # -- Filename mounted into /config and passed to `locust -f`.
+  name: locustfile.py
+  # -- Inline locustfile contents. Ignored when `existingConfigMap` is set.
+  content: ""
+  # -- Use a ConfigMap you manage yourself instead of rendering one from `content`.
+  existingConfigMap: ""
+  # -- Additional files mounted next to the locustfile, e.g. a LoadTestShape or CSV
+  # fixture: `{"shape.py": "from locust import LoadTestShape\n..."}`.
+  extraFiles: {}
+
+workload:
+  # -- Deployment (long-running), Job (run once and stop), or CronJob (run on a schedule).
+  kind: Deployment
+  # -- Job/CronJob: retries before the run is marked failed.
+  backoffLimit: 0
+  # -- Job/CronJob: delete finished Jobs after this many seconds. Empty keeps them.
+  ttlSecondsAfterFinished: ""
+  # -- Job/CronJob: `restartPolicy` for the pod.
+  restartPolicy: Never
+  # -- CronJob: schedule in cron format.
+  schedule: "0 * * * *"
+  # -- CronJob: Allow, Forbid, or Replace.
+  concurrencyPolicy: Forbid
+  # -- CronJob: pause the schedule without deleting it.
+  suspend: false
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+
+# -- Standalone/master replicas. Values above 1 run independent, uncoordinated tests
+# in standalone mode; use `mode: distributed` to coordinate instead.
+replicaCount: 1
+
+worker:
+  # -- Number of Locust workers. Only used when `mode: distributed`.
+  replicaCount: 2
+  # -- Per-worker resources. Falls back to the top-level `resources` when empty.
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  podAnnotations: {}
+  podLabels: {}
+
+service:
+  # -- Expose the Locust web UI. Leave false for headless runs.
+  enabled: false
+  type: ClusterIP
+  port: 8089
+  # -- Only used when `type: NodePort`.
+  nodePort: ""
+  annotations: {}
+  labels: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: locust.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false
+  annotations: {}
+  # -- Use an existing ServiceAccount. Generated from the fullname when empty.
+  name: ""
+
+# -- Pod-level security context. Hardened by default; the image runs as uid 1000.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container-level security context.
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  privileged: false
+  capabilities:
+    drop:
+      - ALL
+
+# -- Resource requests/limits. No CPU limit by default: CFS throttling on a load
+# generator shows up as target latency that is really your own client stalling.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+# -- Size of the emptyDir mounted at /tmp (scratch, CSV/HTML reports, pip packages).
+tmpDirSizeLimit: 1Gi
+
+livenessProbe:
+  enabled: false
+readinessProbe:
+  enabled: false
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+priorityClassName: ""
+terminationGracePeriodSeconds: 30
+# -- Pin DNS or bypass service discovery for the target, e.g.
+# `[{ip: "10.0.0.5", hostnames: ["api.internal"]}]`.
+hostAliases: []
+dnsPolicy: ""
+dnsConfig: {}
+
+# -- Extra environment variables for the Locust container.
+extraEnv: []
+# -- Extra `envFrom` sources (ConfigMaps/Secrets) for the Locust container.
+extraEnvFrom: []
+# -- Extra volumes added to the pod.
+extraVolumes: []
+# -- Extra volume mounts added to the Locust container.
+extraVolumeMounts: []
+# -- Init containers added to the pod.
+initContainers: []
+# -- Sidecar containers added to the pod.
+sidecars: []
