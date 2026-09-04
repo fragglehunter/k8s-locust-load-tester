@@ -1,0 +1,274 @@
+---
+# Pull-request gate: everything here runs on free public-repo minutes and needs no
+# secrets beyond the automatic GITHUB_TOKEN.
+#
+# Action version policy: actions are pinned to floating major tags and bumped by
+# .github/dependabot.yaml. Pinning to a full commit SHA (e.g.
+# actions/checkout@8f4b7f8... # v6.1.0) is the supply-chain-hardened option -- it
+# stops a compromised tag from silently changing what runs here -- and Dependabot
+# updates SHA pins too, if you ever want to make that trade.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+# Nothing in this workflow writes to the repo or a registry.
+permissions:
+  contents: read
+
+# A new push to the same branch or PR makes the in-flight run irrelevant.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (Dockerfile, shell, workflows)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: hadolint
+        uses: hadolint/hadolint-action@v3.5.0
+        with:
+          dockerfile: Dockerfile
+
+      # shellcheck ships with the ubuntu runner image, so there is nothing to
+      # install. runLocust.sh is the container entrypoint and by far the most
+      # important of the three.
+      - name: shellcheck
+        run: shellcheck runLocust.sh push.sh create-locust-loadtest-deploy.sh
+
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+        run: |
+          set -euo pipefail
+          asset="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          url="https://github.com/rhysd/actionlint/releases/download"
+          curl -fsSL "${url}/v${ACTIONLINT_VERSION}/${asset}" \
+            | tar -xz -C "${RUNNER_TEMP}" actionlint
+
+      # actionlint also runs shellcheck over every `run:` block, so the workflows
+      # are held to the same standard as the scripts.
+      - name: actionlint
+        run: |
+          "${RUNNER_TEMP}/actionlint" -color
+
+      # Only real YAML is linted here. charts/*/templates/*.yaml are Go templates
+      # that happen to end in .yaml -- they are not parseable YAML until Helm has
+      # rendered them, and `helm lint` plus kubeconform cover them in the chart
+      # job. `on:` is a YAML boolean, hence truthy.check-keys.
+      - name: yamllint
+        env:
+          YAMLLINT_CONFIG: >-
+            {extends: default,
+            rules: {line-length: {max: 140}, truthy: {check-keys: false}}}
+        run: |
+          pipx install yamllint
+          yamllint -f github -d "${YAMLLINT_CONFIG}" \
+            .github/workflows .github/dependabot.yaml ct.yaml
+
+  chart:
+    name: helm lint + kubeconform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: azure/setup-helm@v5
+
+      - name: Install kubeconform
+        env:
+          KUBECONFORM_VERSION: 0.8.0
+        run: |
+          set -euo pipefail
+          url="https://github.com/yannh/kubeconform/releases/download"
+          curl -fsSL "${url}/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | tar -xz -C "${RUNNER_TEMP}" kubeconform
+
+      # locust.targetHost and a locustfile are required values; the chart fails at
+      # render time without them, which is itself covered by the chart's own
+      # validation and not something this job needs to re-test.
+      - name: Write a locustfile to render with
+        run: |
+          cat > "${RUNNER_TEMP}/locustfile.py" <<'PY'
+          from locust import HttpUser, constant, task
+
+
+          class Example(HttpUser):
+              wait_time = constant(1)
+
+              @task
+              def index(self):
+                  self.client.get("/")
+          PY
+
+      - name: helm lint
+        run: |
+          helm lint charts/locust-load-tester \
+            --set-string locust.targetHost=http://target.default.svc.cluster.local:8080 \
+            --set-file "locustfile.content=${RUNNER_TEMP}/locustfile.py"
+
+      # Every permutation is rendered and validated against the upstream
+      # Kubernetes JSON schemas. -strict rejects unknown fields, which is what
+      # catches a typo'd key that Helm itself is happy to emit.
+      - name: helm template | kubeconform
+        run: |
+          # -o pipefail: without it a failed `helm template` renders nothing and
+          # kubeconform happily validates zero resources.
+          set -euo pipefail
+
+          common=(
+            --set-string locust.targetHost=http://target.default.svc.cluster.local:8080
+            --set-file "locustfile.content=${RUNNER_TEMP}/locustfile.py"
+          )
+
+          render() {
+            local name="$1"
+            shift
+            echo "::group::${name}"
+            helm template ci charts/locust-load-tester "${common[@]}" "$@" \
+              | "${RUNNER_TEMP}/kubeconform" -strict -summary -schema-location default -
+            echo "::endgroup::"
+          }
+
+          render "defaults (standalone Deployment)"
+          render "distributed" --set mode=distributed
+          render "workload.kind=Job" --set workload.kind=Job
+          render "workload.kind=CronJob" --set workload.kind=CronJob
+          render "web UI exposed" \
+            --set locust.headless=false \
+            --set service.enabled=true \
+            --set ingress.enabled=true
+
+  chart-test:
+    name: chart-testing (lint + install on kind)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # ct diffs against target-branch; a shallow clone has no main to diff.
+          fetch-depth: 0
+
+      - uses: azure/setup-helm@v5
+
+      - uses: helm/chart-testing-action@v2
+
+      # ct.yaml points --set-file at this path. It is deliberately not committed:
+      # the file only exists to satisfy the chart's "give me a locustfile"
+      # requirement, and the target it hits is CoreDNS's metrics endpoint (see the
+      # comment in ct.yaml for why that target).
+      - name: Write the locustfile ct feeds the chart
+        run: |
+          cat > /tmp/ct-locustfile.py <<'PY'
+          from locust import HttpUser, constant, task
+
+
+          class Metrics(HttpUser):
+              wait_time = constant(1)
+
+              @task
+              def metrics(self):
+                  self.client.get("/metrics")
+          PY
+
+      - name: ct lint
+        run: ct lint --config ct.yaml
+
+      - uses: docker/setup-buildx-action@v4
+
+      # Install the image built from this commit, not the published one -- a chart
+      # change that breaks the env-var contract has to fail here.
+      - name: Build the image under test
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          platforms: linux/amd64
+          tags: locust-load-tester:ct
+          cache-from: type=gha,scope=ci-amd64
+          cache-to: type=gha,mode=max,scope=ci-amd64,ignore-error=true
+
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: chart-testing
+
+      - name: Load the image into kind
+        run: kind load docker-image locust-load-tester:ct --name chart-testing
+
+      # Installs into an ephemeral namespace, waits for the pod to be Running and
+      # Ready, runs `helm test`, then tears the release down again.
+      - name: ct install
+        run: ct install --config ct.yaml
+
+  build:
+    name: Build image (amd64) + smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v4
+
+      # amd64 only: this job answers "does it build and start", and emulating
+      # arm64 through QEMU triples that for no extra signal. The release build in
+      # image.yaml is the multi-arch one.
+      - name: Build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          platforms: linux/amd64
+          tags: k8s-locust-load-tester:ci
+          cache-from: type=gha,scope=ci-amd64
+          cache-to: type=gha,mode=max,scope=ci-amd64,ignore-error=true
+
+      # The web UI is the cheapest honest assertion available: reaching it proves
+      # the entrypoint parsed its environment, found the mounted locustfile,
+      # imported it (a syntax error in the file is a hard failure at this point)
+      # and started serving -- all without a target to generate load against.
+      - name: Smoke test
+        run: |
+          mkdir -p "${RUNNER_TEMP}/smoke"
+          cat > "${RUNNER_TEMP}/smoke/locustfile.py" <<'PY'
+          from locust import HttpUser, constant, task
+
+
+          class Smoke(HttpUser):
+              wait_time = constant(1)
+
+              @task
+              def index(self):
+                  self.client.get("/")
+          PY
+
+          docker run --detach --name locust-smoke \
+            --publish 8089:8089 \
+            --env TARGET_HOST=http://127.0.0.1:8089 \
+            --env HEADLESS=false \
+            --volume "${RUNNER_TEMP}/smoke:/config:ro" \
+            k8s-locust-load-tester:ci
+
+          up=0
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8089/ > /dev/null 2>&1; then
+              up=1
+              break
+            fi
+            sleep 1
+          done
+
+          echo "::group::container logs"
+          docker logs locust-smoke
+          echo "::endgroup::"
+          docker rm --force locust-smoke > /dev/null
+
+          if [[ "${up}" -ne 1 ]]; then
+            echo "::error::the Locust web UI never answered on :8089"
+            exit 1
+          fi
+          echo "Locust came up and served the web UI."

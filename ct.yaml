@@ -1,0 +1,63 @@
+---
+# chart-testing (ct) configuration -- https://github.com/helm/chart-testing
+#
+# Consumed by the chart-test job in .github/workflows/ci.yaml:
+#   ct lint    --config ct.yaml
+#   ct install --config ct.yaml
+
+remote: origin
+target-branch: main
+chart-dirs:
+  - charts
+
+# Lint and install every chart rather than only the ones that differ from main.
+# There is exactly one chart here, and the install is the only thing that proves
+# the chart still speaks the container's env-var contract, so it should run on
+# every PR -- including PRs that only touch a workflow or the entrypoint script.
+all: true
+
+# ...which is also why the version-increment check is off. It compares against
+# target-branch, so with `all: true` it fails every PR that does not bump
+# Chart.yaml, including PRs that never touch the chart. chart-releaser refuses to
+# re-release a version that already exists, so an un-bumped chart is a no-op
+# release rather than a broken one.
+check-version-increment: false
+
+# The maintainer here is a GitHub user; ct's check resolves every maintainer name
+# through the unauthenticated GitHub API, which is rate-limited and noisy.
+validate-maintainers: false
+
+# ct auto-discovers charts/locust-load-tester/ci/*-values.yaml and installs the
+# chart once per file, so the four permutations there (standalone, distributed,
+# Job, web UI) all run on every PR. These extra args are layered on top of each of
+# them; --set beats -f, which is what makes the image override below stick.
+#
+# Values ct cannot guess. ct splits this string on whitespace, so every token has
+# to be self-contained: `--flag=value`, never `--flag value`.
+#
+# Target under test: a bare kind cluster ships no sample app, and pulling one from
+# Docker Hub spends the shared, unauthenticated pull limit. CoreDNS is already
+# running, and kubeadm -- so kind too -- publishes the Prometheus port on the
+# kube-dns Service, which makes
+# http://kube-dns.kube-system.svc.cluster.local:9153/metrics a plain-HTTP endpoint
+# that answers 200 from any namespace with nothing to install and nothing to pull.
+# Two users at one per second is enough to prove the pod starts, resolves the
+# target and generates traffic, without leaning on kube-system.
+#
+# Image: the chart-test job builds the image from this commit and `kind load`s it
+# as locust-load-tester:ct, so an empty registry plus pullPolicy=Never keeps the
+# install hermetic and tests the code in the PR instead of whatever ghcr.io
+# happens to be serving.
+#
+# /tmp/ct-locustfile.py is written by the "Write the locustfile ct feeds the
+# chart" step in .github/workflows/ci.yaml. Create it yourself before running ct
+# by hand -- any locustfile will do.
+helm-extra-set-args: >-
+  --set-string=locust.targetHost=http://kube-dns.kube-system.svc.cluster.local:9153
+  --set=locust.users=2
+  --set=locust.spawnRate=1
+  --set-file=locustfile.content=/tmp/ct-locustfile.py
+  --set-string=image.registry=
+  --set-string=image.repository=locust-load-tester
+  --set-string=image.tag=ct
+  --set-string=image.pullPolicy=Never

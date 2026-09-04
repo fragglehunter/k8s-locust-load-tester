@@ -1,0 +1,27 @@
+{{- if eq .Values.mode "distributed" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "locust-load-tester.headlessServiceName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "locust-load-tester.labels" . | nindent 4 }}
+  {{- with (include "locust-load-tester.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  {{- /* Workers must be able to dial the master before it reports ready,
+         otherwise they crash-loop waiting for a DNS record that never appears. */}}
+  publishNotReadyAddresses: true
+  ports:
+    - name: master
+      port: 5557
+      targetPort: master
+      protocol: TCP
+  selector:
+    {{- include "locust-load-tester.selectorLabels" . | nindent 4 }}
+    {{- include "locust-load-tester.componentLabel" "master" | nindent 4 }}
+{{- end }}

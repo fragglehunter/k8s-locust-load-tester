@@ -1,0 +1,49 @@
+---
+# Dependabot keeps the versions pinned across this repo current. Free on public
+# repos, and the PRs it opens run through .github/workflows/ci.yaml like any other.
+#
+# If Dependabot never opens a PR, check Insights -> Dependency graph -> Dependabot
+# for a "config file not found" error: GitHub's documented filename is
+# dependabot.yml, and .yaml has not always been accepted. Renaming is the fix.
+version: 2
+
+updates:
+  # The `uses:` refs in .github/workflows. They are pinned to floating major tags,
+  # so this mostly picks up new majors -- and it is also what keeps SHA pins fresh
+  # if this repo ever switches to them.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    groups:
+      # One PR for all of them; five separate action bumps a week is noise.
+      actions:
+        patterns:
+          - "*"
+
+  # The Dockerfile base image (python:<tag>).
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "build"
+
+  # Python dependencies. Note that today the image installs Locust from an
+  # in-Dockerfile `pip install "locust==${LOCUST_VERSION}"`, which Dependabot
+  # cannot see -- until a requirements.txt or pyproject.toml lands at the repo
+  # root this entry has nothing to parse and will show as such on the Dependabot
+  # tab. Bump ARG LOCUST_VERSION in the Dockerfile and appVersion in
+  # charts/locust-load-tester/Chart.yaml by hand in the meantime.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "build"

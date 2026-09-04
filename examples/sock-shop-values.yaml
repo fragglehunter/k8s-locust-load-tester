@@ -1,0 +1,106 @@
+---
+# Run-once Job against Sock Shop, the classic microservices demo.
+#
+# This is the shape to use from a pipeline: `helm install --wait` blocks until the
+# Job finishes, and Locust's exit code becomes the Job's, so a run with failures
+# fails the step. An HTML report is written into the pod's /tmp for you to copy out.
+#
+#   helm install sock-shop-loadtest oci://ghcr.io/fragglehunter/charts/locust-load-tester \
+#     -f examples/sock-shop-values.yaml --wait
+#
+#   POD=$(kubectl get pod -l app.kubernetes.io/instance=sock-shop-loadtest -o name | head -1)
+#   kubectl cp "${POD#pod/}:/tmp/sock-shop-report.html" ./sock-shop-report.html
+#
+# Deploy the target first, if you have not already:
+#   https://github.com/microservices-demo/microservices-demo
+
+workload:
+  kind: Job
+  # One attempt. A load test that failed because the target was unhealthy will fail
+  # again on a retry, and a retry hides the first result.
+  backoffLimit: 0
+  restartPolicy: Never
+  # Let the finished Job (and its logs) hang around for an hour, then clean itself up.
+  ttlSecondsAfterFinished: 3600
+
+locust:
+  # Sock Shop's front end: Service "front-end" on port 80 in namespace "sock-shop".
+  targetHost: http://front-end.sock-shop.svc.cluster.local
+  users: 30
+  spawnRate: 5
+  # Keep it short: --wait blocks for the whole run.
+  runTime: 3m
+  headless: true
+  onlySummary: true
+  loglevel: INFO
+  stopTimeout: 15
+
+  # Uncomment to grade the run on "did it complete" rather than "was the target
+  # healthy" -- Locust exits non-zero if any request failed, and that exit code is
+  # what fails the Job.
+  # extraArgs:
+  #   - --exit-code-on-error
+  #   - "0"
+
+  # The report has to go somewhere writable, and the root filesystem is read-only;
+  # /tmp is the emptyDir the chart always mounts.
+  htmlReport: /tmp/sock-shop-report.html
+
+  # Sock Shop takes a while to become useful after a fresh deploy, and this test
+  # starts by parsing /catalogue as JSON. Wait for the front end to answer over HTTP
+  # before generating load, rather than recording a wall of connection errors.
+  waitForHost:
+    enabled: true
+    timeout: 120
+    # Empty accepts any HTTP response. Pin a code here if you need an exact one.
+    expectStatus: ""
+
+service:
+  enabled: false
+
+locustfile:
+  name: locustfile.py
+  # The test from locustfile-sock-shop.py at the repository root: it walks the
+  # catalogue, logs in, views an item, then adds it to the cart and orders it.
+  content: |-
+    import base64
+
+    import requests
+    requests.packages.urllib3.disable_warnings()
+
+    from locust import HttpUser, TaskSet, task
+    from random import randint, choice
+    base64.encodestring = base64.encodebytes
+
+    class WebTasks(TaskSet):
+
+        @task
+        def load(self):
+            self.client.verify = False
+            base64string = base64.encodebytes(('%s:%s' % ('user', 'password')).encode('utf8')).decode('utf8').replace('\n', '')
+
+            catalogue = self.client.get("/catalogue").json()
+            category_item = choice(catalogue)
+            item_id = category_item["id"]
+
+            self.client.get("/")
+            self.client.get("/login", headers={"Authorization":"Basic %s" % base64string})
+            self.client.get("/category.html")
+            self.client.get("/detail.html?id={}".format(item_id))
+            self.client.delete("/cart")
+            self.client.post("/cart", json={"id": item_id, "quantity": 1})
+            self.client.get("/basket.html")
+            self.client.post("/orders")
+
+
+    class Web(HttpUser):
+        tasks = [WebTasks]
+        min_wait = 0
+        max_wait = 0
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    memory: 512Mi

@@ -1,0 +1,46 @@
+"""Load test for the Faces demo app (github.com/BuoyantIO/faces-demo).
+
+Point this at the `face` service, not `faces-gui`: `face` is the edge service the
+browser actually hammers, and it fans out to `smiley` and `color` behind it, so
+this exercises the whole chain rather than just serving static HTML.
+
+    locust.targetHost: http://face.faces.svc.cluster.local
+
+The GUI renders a grid where the small centre block requests /center/ and every
+other cell requests /edge/, so edge traffic dominates by roughly 8:1. The weights
+below mirror that.
+
+Faces deliberately injects errors and latency (ERROR_FRACTION / DELAY_BUCKETS), so
+a non-zero failure rate here is the app behaving as designed, not a broken test.
+"""
+
+from locust import HttpUser, task, between
+
+
+class FacesUser(HttpUser):
+    # Real browsers poll each cell on a timer rather than in a hot loop.
+    wait_time = between(0.5, 2.0)
+
+    @task(8)
+    def edge_cell(self):
+        # 5xx is Faces' injected-error path; count it as a failure but keep going.
+        self.client.get("/edge/", name="/edge/")
+
+    @task(1)
+    def center_cell(self):
+        self.client.get("/center/", name="/center/")
+
+
+class FacesGuiUser(HttpUser):
+    """Optional: also load the GUI itself.
+
+    Only useful when you point locust.targetHost at faces-gui instead. Give it a
+    weight of 0 so it stays inert unless you deliberately enable it.
+    """
+
+    weight = 0
+    wait_time = between(1, 3)
+
+    @task
+    def index(self):
+        self.client.get("/", name="/ (gui)")

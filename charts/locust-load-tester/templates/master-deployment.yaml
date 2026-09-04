@@ -1,0 +1,23 @@
+{{- if eq .Values.mode "distributed" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "locust-load-tester.masterFullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "locust-load-tester.labels" . | nindent 4 }}
+    {{- include "locust-load-tester.componentLabel" "master" | nindent 4 }}
+  {{- with (include "locust-load-tester.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- /* A Locust cluster has exactly one master; replicaCount does not apply. */}}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "locust-load-tester.selectorLabels" . | nindent 6 }}
+      {{- include "locust-load-tester.componentLabel" "master" | nindent 6 }}
+  template:
+    {{- include "locust-load-tester.podTemplate" (dict "ctx" $ "role" "master") | nindent 4 }}
+{{- end }}

@@ -1,0 +1,31 @@
+{{- if eq .Values.workload.kind "CronJob" }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "locust-load-tester.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "locust-load-tester.labels" . | nindent 4 }}
+    {{- include "locust-load-tester.componentLabel" "standalone" | nindent 4 }}
+  {{- with (include "locust-load-tester.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  schedule: {{ .Values.workload.schedule | quote }}
+  concurrencyPolicy: {{ .Values.workload.concurrencyPolicy }}
+  suspend: {{ .Values.workload.suspend }}
+  successfulJobsHistoryLimit: {{ .Values.workload.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.workload.failedJobsHistoryLimit }}
+  jobTemplate:
+    metadata:
+      labels:
+        {{- include "locust-load-tester.labels" . | nindent 8 }}
+    spec:
+      backoffLimit: {{ .Values.workload.backoffLimit }}
+      {{- with .Values.workload.ttlSecondsAfterFinished }}
+      ttlSecondsAfterFinished: {{ . }}
+      {{- end }}
+      template:
+        {{- include "locust-load-tester.podTemplate" (dict "ctx" $ "role" "standalone") | nindent 8 }}
+{{- end }}

@@ -1,0 +1,69 @@
+# ct: chart-testing values — standalone, headless Deployment (the default path).
+# Covers: mode=standalone, workload.kind=Deployment, the rendered locustfile
+# ConfigMap, --tags/--exclude-tags filtering and CSV output into the /tmp emptyDir.
+#
+# targetHost is the CoreDNS metrics endpoint. kubeadm (and therefore kind) always
+# creates the kube-dns Service with a `metrics` port on 9153, so this resolves and
+# answers 200 in a bare cluster with nothing else installed.
+
+mode: standalone
+
+locust:
+  targetHost: http://kube-dns.kube-system.svc.cluster.local:9153
+  users: 5
+  spawnRate: 2
+  # Short: ct waits on the Deployment becoming available, not on the run, but a
+  # finite run keeps a stray test pod from generating load for the whole CI job.
+  runTime: 1m
+  headless: true
+  onlySummary: true
+  loglevel: INFO
+  stopTimeout: 5
+  tags:
+    - smoke
+  excludeTags:
+    - nightly
+  csv:
+    enabled: true
+    prefix: /tmp/locust
+    fullHistory: true
+
+workload:
+  kind: Deployment
+
+replicaCount: 1
+
+service:
+  enabled: false
+
+locustfile:
+  name: locustfile.py
+  content: |-
+    from locust import HttpUser, between, tag, task
+
+
+    class CoreDNSMetricsUser(HttpUser):
+        """Scrapes the CoreDNS metrics endpoint every kind cluster already runs."""
+
+        wait_time = between(0.5, 1.0)
+
+        @tag("smoke")
+        @task(3)
+        def metrics(self):
+            with self.client.get("/metrics", name="GET /metrics", catch_response=True) as r:
+                if r.status_code != 200:
+                    r.failure(f"unexpected status {r.status_code}")
+
+        @tag("nightly")
+        @task
+        def metrics_verbose(self):
+            # Filtered out by locust.excludeTags above; present so the rendered
+            # command line actually exercises --tags and --exclude-tags.
+            self.client.get("/metrics", name="GET /metrics [nightly]")
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 96Mi
+  limits:
+    memory: 256Mi

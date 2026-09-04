@@ -1,0 +1,5 @@
+# The image needs exactly one file from this repo: the entrypoint. Everything else
+# (chart, examples, locustfiles, git metadata) is repo furniture that would only
+# bloat the build context and bust the layer cache on unrelated commits.
+*
+!runLocust.sh

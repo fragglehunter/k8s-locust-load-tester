@@ -1,0 +1,855 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "locust-load-tester values",
+  "description": "Values for the locust-load-tester chart. locust.targetHost and one of locustfile.content / locustfile.existingConfigMap are mandatory in practice, but they are validated by the chart's own templates so the failure message can explain how to set them.",
+  "type": "object",
+  "properties": {
+    "global": {
+      "description": "Reserved for values shared with subcharts. Unused by this chart.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "mode": {
+      "description": "Topology: standalone runs a single self-contained Locust process, distributed runs a master plus worker.replicaCount workers.",
+      "type": "string",
+      "enum": [
+        "standalone",
+        "distributed"
+      ]
+    },
+    "image": {
+      "description": "Locust container image.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "registry": {
+          "description": "Container registry host. Empty pulls from Docker Hub.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repository": {
+          "description": "Image repository without the registry prefix.",
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "description": "Image tag. Falls back to Chart.AppVersion when empty. Numeric-looking tags may arrive as a number from --set, so numbers are accepted.",
+          "type": [
+            "string",
+            "integer",
+            "number",
+            "null"
+          ]
+        },
+        "digest": {
+          "description": "Pin by digest (sha256:...). Takes precedence over tag.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pullPolicy": {
+          "description": "Image pull policy.",
+          "type": "string",
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      }
+    },
+    "imagePullSecrets": {
+      "description": "Secrets used to pull from a private registry, e.g. [{name: harbor-creds}].",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "nameOverride": {
+      "description": "Override the chart name used in resource names and labels.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fullnameOverride": {
+      "description": "Override the fully qualified resource name entirely.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "commonLabels": {
+      "description": "Labels added to every rendered object.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "commonAnnotations": {
+      "description": "Annotations added to every rendered object.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "locust": {
+      "description": "Locust run configuration. Every key here maps to an environment variable read by the image entrypoint.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "targetHost": {
+          "description": "Target under test, e.g. http://dotnet-8-app:5000. Required; the chart fails at render time when unset.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "users": {
+          "description": "Peak concurrent simulated users (--users).",
+          "type": [
+            "integer",
+            "string"
+          ],
+          "minimum": 1
+        },
+        "spawnRate": {
+          "description": "Users started per second until users is reached (--spawn-rate). May be fractional.",
+          "type": [
+            "number",
+            "string"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "runTime": {
+          "description": "Stop after this long, e.g. 5m or 1h30m (--run-time). Empty runs until the pod is deleted.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "headless": {
+          "description": "Run without the web UI (--headless).",
+          "type": "boolean"
+        },
+        "autostart": {
+          "description": "Serve the web UI but start the test immediately (--autostart). Requires headless: false.",
+          "type": "boolean"
+        },
+        "onlySummary": {
+          "description": "Suppress per-interval stats and print only the final summary (--only-summary).",
+          "type": "boolean"
+        },
+        "loglevel": {
+          "description": "Locust log level (--loglevel).",
+          "type": "string",
+          "enum": [
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR",
+            "CRITICAL"
+          ]
+        },
+        "exitCodeOnError": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255,
+          "description": "Process exit code when any request failed (--exit-code-on-error). 0 makes a Job report success even with failures."
+        },
+        "stopTimeout": {
+          "description": "Seconds to wait for tasks to finish on shutdown (--stop-timeout). Empty omits the flag; accepts a number or a numeric string.",
+          "type": [
+            "string",
+            "integer",
+            "null"
+          ]
+        },
+        "tags": {
+          "description": "Only run tasks carrying these @tag names (--tags).",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "excludeTags": {
+          "description": "Skip tasks carrying these @tag names (--exclude-tags).",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "expectWorkers": {
+          "description": "Wait for this many workers before starting (--expect-workers). Empty defaults to worker.replicaCount; accepts a number or a numeric string.",
+          "type": [
+            "string",
+            "integer",
+            "null"
+          ]
+        },
+        "csv": {
+          "description": "CSV statistics output.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "description": "Write *_stats.csv / *_failures.csv (--csv).",
+              "type": "boolean"
+            },
+            "prefix": {
+              "description": "Path prefix for the CSV files. Must be under a writable mount, e.g. /tmp.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "fullHistory": {
+              "description": "Also write a full stats history row per interval (--csv-full-history).",
+              "type": "boolean"
+            }
+          }
+        },
+        "htmlReport": {
+          "description": "Write an HTML report to this path on completion (--html). Must be writable, e.g. under /tmp.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "waitForHost": {
+          "description": "Poll targetHost before starting so the run does not report connection errors while the target is still rolling out.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "description": "Enable the pre-flight poll.",
+              "type": "boolean"
+            },
+            "timeout": {
+              "description": "Give up (and start anyway) after this many seconds.",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "minimum": 0
+            },
+            "expectStatus": {
+              "description": "Require this exact HTTP status. Empty accepts any HTTP response.",
+              "type": [
+                "string",
+                "integer",
+                "null"
+              ]
+            }
+          }
+        },
+        "loop": {
+          "description": "Restart the run when Locust exits successfully. Only valid with workload.kind: Deployment and a non-empty runTime.",
+          "type": "boolean"
+        },
+        "extraPipPackages": {
+          "description": "pip packages installed into /tmp at container start, e.g. [locust-plugins].",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "extraArgs": {
+          "description": "Extra flags appended verbatim to the locust command line.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": [
+              "string",
+              "integer",
+              "number"
+            ]
+          }
+        }
+      }
+    },
+    "locustfile": {
+      "description": "The locustfile and any files mounted alongside it.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Filename mounted into /config and passed to locust -f.",
+          "type": "string",
+          "minLength": 1
+        },
+        "content": {
+          "description": "Inline locustfile contents. Ignored when existingConfigMap is set.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "existingConfigMap": {
+          "description": "Use a ConfigMap you manage yourself instead of rendering one from content.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extraFiles": {
+          "description": "Additional files mounted next to the locustfile, keyed by filename.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "workload": {
+      "description": "How the load generator is scheduled.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "description": "Deployment (long-running), Job (run once and stop), or CronJob (run on a schedule).",
+          "type": "string",
+          "enum": [
+            "Deployment",
+            "Job",
+            "CronJob"
+          ]
+        },
+        "backoffLimit": {
+          "description": "Job/CronJob: retries before the run is marked failed.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "ttlSecondsAfterFinished": {
+          "description": "Job/CronJob: delete finished Jobs after this many seconds. Empty keeps them; accepts a number or a numeric string.",
+          "type": [
+            "string",
+            "integer",
+            "null"
+          ]
+        },
+        "restartPolicy": {
+          "description": "Job/CronJob: restartPolicy for the pod.",
+          "type": "string",
+          "enum": [
+            "Never",
+            "OnFailure"
+          ]
+        },
+        "schedule": {
+          "description": "CronJob: schedule in cron format.",
+          "type": "string",
+          "minLength": 1
+        },
+        "concurrencyPolicy": {
+          "description": "CronJob: what to do when a run is still going at the next scheduled time.",
+          "type": "string",
+          "enum": [
+            "Allow",
+            "Forbid",
+            "Replace"
+          ]
+        },
+        "suspend": {
+          "description": "CronJob: pause the schedule without deleting it.",
+          "type": "boolean"
+        },
+        "successfulJobsHistoryLimit": {
+          "description": "CronJob: completed Jobs retained.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "failedJobsHistoryLimit": {
+          "description": "CronJob: failed Jobs retained.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "replicaCount": {
+      "description": "Standalone/master replicas. Above 1 in standalone mode runs independent, uncoordinated tests.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "worker": {
+      "description": "Worker pool. Only used when mode: distributed.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "replicaCount": {
+          "description": "Number of Locust workers.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "resources": {
+          "description": "Per-worker resources. Falls back to the top-level resources when empty.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "nodeSelector": {
+          "description": "Worker node selector.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "tolerations": {
+          "description": "Worker tolerations.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object"
+          }
+        },
+        "affinity": {
+          "description": "Worker affinity rules.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "topologySpreadConstraints": {
+          "description": "Worker topology spread constraints.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object"
+          }
+        },
+        "podAnnotations": {
+          "description": "Annotations added to worker pods only.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "podLabels": {
+          "description": "Labels added to worker pods only.",
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "service": {
+      "description": "Service in front of the Locust web UI.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "Expose the Locust web UI. Leave false for headless runs.",
+          "type": "boolean"
+        },
+        "type": {
+          "description": "Service type.",
+          "type": "string",
+          "enum": [
+            "ClusterIP",
+            "NodePort",
+            "LoadBalancer"
+          ]
+        },
+        "port": {
+          "description": "Service port for the web UI.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "nodePort": {
+          "description": "Fixed node port. Only used when type: NodePort; empty lets Kubernetes allocate one.",
+          "type": [
+            "string",
+            "integer",
+            "null"
+          ]
+        },
+        "annotations": {
+          "description": "Annotations added to the Service.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "labels": {
+          "description": "Labels added to the Service.",
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "ingress": {
+      "description": "Ingress for the Locust web UI. Requires service.enabled.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "Create an Ingress.",
+          "type": "boolean"
+        },
+        "className": {
+          "description": "ingressClassName. Empty uses the cluster default IngressClass.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "annotations": {
+          "description": "Annotations added to the Ingress.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "hosts": {
+          "description": "Hosts and paths routed to the web UI.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "host": {
+                "description": "Hostname served.",
+                "type": "string"
+              },
+              "paths": {
+                "description": "Paths routed to the web UI for this host.",
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "description": "URL path.",
+                      "type": "string"
+                    },
+                    "pathType": {
+                      "description": "Kubernetes path match type.",
+                      "type": "string",
+                      "enum": [
+                        "Exact",
+                        "Prefix",
+                        "ImplementationSpecific"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tls": {
+          "description": "TLS blocks passed through to the Ingress spec.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "serviceAccount": {
+      "description": "ServiceAccount used by the Locust pods. The load generator needs no API access.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "create": {
+          "description": "Create a ServiceAccount.",
+          "type": "boolean"
+        },
+        "automountServiceAccountToken": {
+          "description": "Mount an API token into the pod. Off by default; nothing here talks to the API server.",
+          "type": "boolean"
+        },
+        "annotations": {
+          "description": "Annotations added to the ServiceAccount.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Use an existing ServiceAccount. Generated from the fullname when empty.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "podSecurityContext": {
+      "description": "Pod-level security context, passed through verbatim.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "securityContext": {
+      "description": "Container-level security context, passed through verbatim. readOnlyRootFilesystem is why /tmp is an emptyDir.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "resources": {
+      "description": "Resource requests/limits for the Locust container.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "limits": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "requests": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "tmpDirSizeLimit": {
+      "description": "Size of the emptyDir mounted at /tmp (scratch, CSV/HTML reports, pip packages).",
+      "type": [
+        "string",
+        "integer",
+        "null"
+      ]
+    },
+    "livenessProbe": {
+      "description": "Liveness probe. Off by default: a headless run legitimately stops serving anything.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "readinessProbe": {
+      "description": "Readiness probe. Off by default for the same reason as livenessProbe.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "podAnnotations": {
+      "description": "Annotations added to every Locust pod.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "podLabels": {
+      "description": "Labels added to every Locust pod.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "nodeSelector": {
+      "description": "Node selector for Locust pods.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "tolerations": {
+      "description": "Tolerations for Locust pods.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object"
+      }
+    },
+    "affinity": {
+      "description": "Affinity rules for Locust pods.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "topologySpreadConstraints": {
+      "description": "Topology spread constraints for Locust pods.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object"
+      }
+    },
+    "priorityClassName": {
+      "description": "PriorityClass for Locust pods.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "terminationGracePeriodSeconds": {
+      "description": "Grace period before the pod is killed. Should exceed locust.stopTimeout.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "hostAliases": {
+      "description": "Extra /etc/hosts entries, e.g. to pin DNS for the target.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "ip": {
+            "type": "string"
+          },
+          "hostnames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "dnsPolicy": {
+      "description": "Pod dnsPolicy. Empty leaves the Kubernetes default (ClusterFirst).",
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "",
+        "ClusterFirst",
+        "ClusterFirstWithHostNet",
+        "Default",
+        "None",
+        null
+      ]
+    },
+    "dnsConfig": {
+      "description": "Pod dnsConfig, passed through verbatim. Required when dnsPolicy: None.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "extraEnv": {
+      "description": "Extra environment variables for the Locust container.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object"
+      }
+    },
+    "extraEnvFrom": {
+      "description": "Extra envFrom sources (ConfigMaps/Secrets) for the Locust container.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object"
+      }
+    },
+    "extraVolumes": {
+      "description": "Extra volumes added to the pod.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object"
+      }
+    },
+    "extraVolumeMounts": {
+      "description": "Extra volume mounts added to the Locust container.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object"
+      }
+    },
+    "initContainers": {
+      "description": "Init containers added to the pod.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object"
+      }
+    },
+    "sidecars": {
+      "description": "Sidecar containers added to the pod.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object"
+      }
+    }
+  }
+}

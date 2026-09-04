@@ -1,0 +1,57 @@
+# ct: chart-testing values — run-once Job.
+# Covers: workload.kind=Job, restartPolicy/backoffLimit, the waitForHost pre-flight
+# poll, and the HTML report written into the /tmp emptyDir (the root filesystem is
+# read-only).
+#
+# `helm install --wait` blocks until this Job completes, so runTime is deliberately
+# tiny — it is the one permutation whose run length gates how long ct takes.
+
+workload:
+  kind: Job
+  restartPolicy: Never
+  backoffLimit: 0
+
+locust:
+  targetHost: http://kube-dns.kube-system.svc.cluster.local:9153
+  users: 3
+  spawnRate: 3
+  runTime: 20s
+  headless: true
+  onlySummary: true
+  loglevel: INFO
+  htmlReport: /tmp/locust-report.html
+  waitForHost:
+    enabled: true
+    timeout: 30
+    # Any answer proves the endpoint is up: CoreDNS serves metrics on /metrics and
+    # 404s on /, so pinning an exact status here would just time out.
+    expectStatus: ""
+  # Locust exits 1 when the run recorded any failure. A shared CI cluster is a
+  # noisy target and this Job's exit code is the chart-testing pass/fail signal,
+  # so grade the install on "did it run", not "was the cluster healthy".
+  extraArgs:
+    - --exit-code-on-error
+    - "0"
+
+service:
+  enabled: false
+
+locustfile:
+  name: locustfile.py
+  content: |-
+    from locust import HttpUser, between, task
+
+
+    class CoreDNSMetricsUser(HttpUser):
+        wait_time = between(0.2, 0.5)
+
+        @task
+        def metrics(self):
+            self.client.get("/metrics", name="GET /metrics")
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 96Mi
+  limits:
+    memory: 256Mi

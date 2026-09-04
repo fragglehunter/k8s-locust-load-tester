@@ -1,0 +1,80 @@
+---
+# Headless, time-boxed load test against a .NET service in the same cluster.
+#
+# This is the plainest useful shape: one pod, no web UI, run for 5 minutes, print a
+# summary, write CSVs to the /tmp emptyDir. The locustfile is the repo's
+# locustfile-dotnet-app.py, embedded so this file installs on its own.
+#
+#   helm install dotnet-loadtest oci://ghcr.io/fragglehunter/charts/locust-load-tester \
+#     -f examples/dotnet-app-values.yaml
+#
+# Follow it with:
+#   kubectl logs -f -l app.kubernetes.io/instance=dotnet-loadtest --tail=100
+#
+# Change locust.targetHost to your own Service before running this anywhere real.
+
+mode: standalone
+
+locust:
+  # The .NET sample from the original README: Service "dotnet-8-app" on port 5000.
+  targetHost: http://dotnet-8-app:5000
+  users: 50
+  spawnRate: 10
+  # Bounded run. Leave empty to keep going until `helm uninstall`.
+  runTime: 5m
+  headless: true
+  # Per-interval stats are noise in `kubectl logs` for a run this long; the summary
+  # at the end has everything.
+  onlySummary: true
+  loglevel: INFO
+  # Give in-flight tasks a moment to finish instead of cutting them off.
+  stopTimeout: 10
+
+  # CSVs land in the writable emptyDir at /tmp, because the root filesystem is
+  # read-only. Copy them out before the pod goes away:
+  #   kubectl cp <pod>:/tmp/locust_stats.csv ./locust_stats.csv
+  csv:
+    enabled: true
+    prefix: /tmp/locust
+    fullHistory: true
+
+workload:
+  kind: Deployment
+
+replicaCount: 1
+
+locustfile:
+  name: locustfile.py
+  # The test from locustfile-dotnet-app.py at the repository root.
+  content: |-
+    import base64
+
+    import requests
+    requests.packages.urllib3.disable_warnings()
+
+    from locust import HttpUser, TaskSet, task
+    from random import randint, choice
+    base64.encodestring = base64.encodebytes
+
+    class WebTasks(TaskSet):
+
+        @task
+        def load(self):
+            self.client.verify = False
+
+            self.client.get("/test")
+            self.client.get("/health")
+
+    class Web(HttpUser):
+        tasks = [WebTasks]
+        min_wait = 0
+        max_wait = 0
+
+# 50 users with no wait time between requests is genuinely busy; give the generator
+# enough CPU that you are measuring the target and not the client.
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    memory: 512Mi

@@ -1,0 +1,153 @@
+---
+# Publishes the container image to GHCR. Public packages on GHCR have no storage
+# or bandwidth cost, and GITHUB_TOKEN is the only credential involved.
+#
+# Action version policy: floating major tags, bumped by .github/dependabot.yaml.
+# Full-SHA pins are the harder target for a supply-chain attack if you want them
+# later; Dependabot maintains those too.
+name: Image
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Publishing runs are not cancelled: a superseded build still produced a digest
+# worth having, and cancelling mid-push can leave a tag pointing at nothing.
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/fragglehunter/k8s-locust-load-tester
+
+jobs:
+  publish:
+    name: Build and push (amd64 + arm64)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # id-token + attestations are what let actions/attest-build-provenance mint
+      # a signed provenance statement without a long-lived key.
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v6
+
+      # arm64 is built under emulation. It is slow but free, and the alternative
+      # (a native arm64 runner) is not free on a personal account.
+      - uses: docker/setup-qemu-action@v4
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Tagging rules:
+      #   v1.2.3      -> 1.2.3, 1.2, 1, latest
+      #   main push   -> main, sha-<short>
+      #   dispatch    -> whatever ref it ran on, same rules
+      #
+      # `latest` is deliberately tag-only. If every main push moved `latest`, then
+      # anyone running `docker pull ...:latest` -- which includes the chart's own
+      # fallback for people who override image.tag -- would be tracking unreleased
+      # commits. Tags are the only thing here that has been deliberately cut, so
+      # they are the only thing allowed to claim to be the latest release.
+      #
+      # The {{major}} tag is suppressed for 0.x because a bare `0` tag implies a
+      # stability that a 0.x series does not have.
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+            type=ref,event=branch
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      # build-args feed the LABEL block in the Dockerfile so a plain
+      # `docker inspect` shows real values; `labels`/`annotations` from the
+      # metadata action set the same OCI keys on the manifest and index. Both are
+      # wanted: the first survives `docker history`, the second is what registries
+      # and Artifact Hub read.
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            REVISION=${{ github.sha }}
+            CREATED=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,mode=max,scope=image
+          sbom: true
+          provenance: mode=max
+
+      # buildkit's own provenance/SBOM ride along in the image index; this adds
+      # the GitHub-signed attestation that `gh attestation verify` checks.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      # ---------------------------------------------------------------------
+      # Optional: keyless cosign signatures.
+      #
+      # The provenance attestation above already ties this image to this workflow
+      # run, verifiable with `gh attestation verify --repo fragglehunter/...`, so
+      # cosign is duplicate machinery for a personal repo -- another action to
+      # keep current, another way for a release to fail at the last step. If a
+      # consumer ever asks for a cosign signature (an admission controller with a
+      # Sigstore policy, say), uncomment this; no keys are needed, because the
+      # OIDC token from `id-token: write` is the identity.
+      #
+      # - uses: sigstore/cosign-installer@v3
+      # - name: Sign the image (keyless)
+      #   env:
+      #     DIGEST: ${{ steps.build.outputs.digest }}
+      #   run: cosign sign --yes "${IMAGE}@${DIGEST}"
+      #
+      # Verify with:
+      #   cosign verify ghcr.io/fragglehunter/k8s-locust-load-tester:<tag> \
+      #     --certificate-identity-regexp \
+      #       'https://github.com/fragglehunter/k8s-locust-load-tester/.github/workflows/image.yaml@.*' \
+      #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+      # ---------------------------------------------------------------------
+
+      - name: Summary
+        run: |
+          {
+            echo "### Pushed"
+            echo
+            echo '```'
+            echo "${IMAGE}@${DIGEST}"
+            echo
+            echo "${TAGS}"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}

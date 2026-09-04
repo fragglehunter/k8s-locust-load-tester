@@ -1,0 +1,33 @@
+apiVersion: v2
+name: locust-load-tester
+description: Run a Locust load test in Kubernetes against any target service, with the locustfile supplied as chart values or an existing ConfigMap.
+type: application
+
+# Chart version. Bumped by the release workflow / manually per chart change.
+version: 0.1.0
+
+# Version of Locust baked into the default container image.
+appVersion: "2.46.4"
+
+home: https://github.com/fragglehunter/k8s-locust-load-tester
+sources:
+  - https://github.com/fragglehunter/k8s-locust-load-tester
+icon: https://raw.githubusercontent.com/locustio/locust/master/locust/webui/dist/assets/logo.png
+
+keywords:
+  - locust
+  - load-testing
+  - performance
+  - benchmark
+  - stress-testing
+
+maintainers:
+  - name: Phil Henderson
+    url: https://github.com/fragglehunter
+
+annotations:
+  artifacthub.io/category: monitoring-logging
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/changes: |
+    - kind: added
+      description: Initial release of the locust-load-tester chart
