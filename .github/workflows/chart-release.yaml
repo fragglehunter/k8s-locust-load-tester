@@ -11,12 +11,20 @@
 # Full-SHA pins are the more supply-chain-hardened option if you want them later.
 name: Release chart
 
+# Deliberately NOT filtered on `paths: charts/**`. A path filter never matches the
+# first push of a branch to an empty repository, so a fresh clone-and-push would
+# register this workflow but never run it -- the chart would silently never be
+# released, and `workflow_dispatch` 404s until GitHub has seen the workflow run at
+# least once, leaving no way to recover without editing this file. Running on every
+# push to main costs one cheap job: the release is idempotent (chart-releaser's
+# skip_existing, plus an explicit registry existence check before `helm push`), so
+# pushes that do not touch the chart are a no-op.
 on:
   push:
     branches:
       - main
-    paths:
-      - 'charts/**'
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
