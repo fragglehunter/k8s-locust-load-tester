@@ -86,9 +86,12 @@ locust:
   # equivalent of the old `while true; do locust ...; done` wrapper.
   loop: false
 
-  # -- pip packages installed into /tmp at container start, e.g. `[locust-plugins]`.
-  # Requires `securityContext.readOnlyRootFilesystem: true` only because they land
-  # in an emptyDir; no image rebuild needed.
+  # -- pip packages installed at container start, e.g. `[locust-plugins]`, so you can
+  # add a dependency without rebuilding the image. They are installed with
+  # `pip --target /tmp/pip-packages`, which is inside the writable emptyDir, so this
+  # works with the default `securityContext.readOnlyRootFilesystem: true`. The install
+  # runs on every pod start, so pin versions and prefer a rebuilt image for anything
+  # long-lived.
   extraPipPackages: []
 
   # -- Extra flags appended verbatim to the locust command line.

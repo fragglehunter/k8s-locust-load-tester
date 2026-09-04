@@ -1,7 +1,7 @@
 # locust-load-tester
 
 ![Type: application](https://img.shields.io/badge/type-application-informational)
-![Version: 0.1.0](https://img.shields.io/badge/version-0.1.0-informational)
+![Version: 0.1.1](https://img.shields.io/badge/version-0.1.1-informational)
 ![AppVersion: 2.46.4](https://img.shields.io/badge/appVersion-2.46.4-informational)
 ![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)
 
@@ -50,7 +50,7 @@ Pin the chart version in anything automated:
 
 ```bash
 helm install my-test oci://ghcr.io/fragglehunter/charts/locust-load-tester \
-  --version 0.1.0 \
+  --version 0.1.1 \
   -f my-values.yaml
 ```
 

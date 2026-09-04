@@ -165,8 +165,8 @@ digest worth keeping, and cancelling mid-push can leave a tag pointing at nothin
 Chart, from the OCI registry:
 
 ```bash
-helm show chart oci://ghcr.io/fragglehunter/charts/locust-load-tester --version 0.1.0
-helm pull oci://ghcr.io/fragglehunter/charts/locust-load-tester --version 0.1.0
+helm show chart oci://ghcr.io/fragglehunter/charts/locust-load-tester --version 0.1.1
+helm pull oci://ghcr.io/fragglehunter/charts/locust-load-tester --version 0.1.1
 ```
 
 Chart, from the Pages repository:
@@ -197,7 +197,7 @@ End to end, which is the only check that proves the chart and the image agree:
 
 ```bash
 helm install verify oci://ghcr.io/fragglehunter/charts/locust-load-tester \
-  --version 0.1.0 \
+  --version 0.1.1 \
   --set workload.kind=Job \
   --set locust.targetHost=http://kube-dns.kube-system.svc.cluster.local:9153 \
   --set locust.runTime=20s \

@@ -4,7 +4,7 @@ description: Run a Locust load test in Kubernetes against any target service, wi
 type: application
 
 # Chart version. Bumped by the release workflow / manually per chart change.
-version: 0.1.0
+version: 0.1.1
 
 # Version of Locust baked into the default container image.
 appVersion: "2.46.4"
@@ -29,5 +29,5 @@ annotations:
   artifacthub.io/category: monitoring-logging
   artifacthub.io/license: Apache-2.0
   artifacthub.io/changes: |
-    - kind: added
-      description: Initial release of the locust-load-tester chart
+    - kind: fixed
+      description: Correct the values.yaml documentation for locust.extraPipPackages
