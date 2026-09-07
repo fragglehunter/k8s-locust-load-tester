@@ -54,7 +54,7 @@ jobs:
       # by committing to the gh-pages branch, which is plain `contents: write`,
       # and GitHub rebuilds the Pages site from that branch on its own.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # cr needs the full history to work out which chart versions are new.
           fetch-depth: 0

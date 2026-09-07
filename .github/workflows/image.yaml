@@ -39,7 +39,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # arm64 is built under emulation. It is slow but free, and the alternative
       # (a native arm64 runner) is not free on a personal account.
