@@ -29,7 +29,7 @@ jobs:
     name: Lint (Dockerfile, shell, workflows)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: hadolint
         uses: hadolint/hadolint-action@v3.5.0
@@ -76,7 +76,7 @@ jobs:
     name: helm lint + kubeconform
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: azure/setup-helm@v5
 
@@ -148,7 +148,7 @@ jobs:
     name: chart-testing (lint + install on kind)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # ct diffs against target-branch; a shallow clone has no main to diff.
           fetch-depth: 0
@@ -209,7 +209,7 @@ jobs:
     name: Build image (amd64) + smoke test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v4
 
