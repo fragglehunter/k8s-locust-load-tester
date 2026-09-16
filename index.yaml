@@ -4,6 +4,38 @@ entries:
   - annotations:
       artifacthub.io/category: monitoring-logging
       artifacthub.io/changes: |
+        - kind: added
+          description: "locustfile.preset: run a locustfile bundled with the chart instead of passing a .py file"
+        - kind: changed
+          description: The example locustfiles now ship inside the chart under files/locustfiles/
+      artifacthub.io/license: Apache-2.0
+    apiVersion: v2
+    appVersion: 2.46.4
+    created: "2026-09-16T20:09:35.967162696Z"
+    description: Run a Locust load test in Kubernetes against any target service,
+      with the locustfile supplied as chart values or an existing ConfigMap.
+    digest: df4a6adfdcb723c05c4545315a732a29962703c0cc7c3169649cfacd0ad2656e
+    home: https://github.com/fragglehunter/k8s-locust-load-tester
+    icon: https://raw.githubusercontent.com/locustio/locust/master/locust/webui/dist/assets/logo.png
+    keywords:
+    - locust
+    - load-testing
+    - performance
+    - benchmark
+    - stress-testing
+    maintainers:
+    - name: Phil Henderson
+      url: https://github.com/fragglehunter
+    name: locust-load-tester
+    sources:
+    - https://github.com/fragglehunter/k8s-locust-load-tester
+    type: application
+    urls:
+    - https://github.com/fragglehunter/k8s-locust-load-tester/releases/download/locust-load-tester-0.2.0/locust-load-tester-0.2.0.tgz
+    version: 0.2.0
+  - annotations:
+      artifacthub.io/category: monitoring-logging
+      artifacthub.io/changes: |
         - kind: fixed
           description: Correct the values.yaml documentation for locust.extraPipPackages
       artifacthub.io/license: Apache-2.0
@@ -31,4 +63,4 @@ entries:
     urls:
     - https://github.com/fragglehunter/k8s-locust-load-tester/releases/download/locust-load-tester-0.1.1/locust-load-tester-0.1.1.tgz
     version: 0.1.1
-generated: "2026-09-04T17:58:44.035878733Z"
+generated: "2026-09-16T20:09:35.967177714Z"
