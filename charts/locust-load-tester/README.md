@@ -155,7 +155,7 @@ The chart refuses to render, with a message naming the fix, when:
 | Key | Description | Default |
 | --- | --- | --- |
 | `locustfile.name` | Filename mounted into /config and passed to `locust -f`. | `"locustfile.py"` |
-| `locustfile.preset` | Bundled locustfile to run: `faces`, `emojivoto`, `emojivoto-legacy`, `sock-shop`, `dotnet-app`. Lowest precedence of the three. | `""` |
+| `locustfile.preset` | Bundled locustfile to run: `faces`, `otel-demo`, `emojivoto`, `emojivoto-legacy`, `sock-shop`, `dotnet-app`. Lowest precedence of the three. | `""` |
 | `locustfile.content` | Inline locustfile contents. Ignored when `existingConfigMap` is set. Usually supplied with `--set-file locustfile.content=./locustfile.py`. | `""` |
 | `locustfile.existingConfigMap` | Use a ConfigMap you manage yourself instead of rendering one from `content`. | `""` |
 | `locustfile.extraFiles` | Additional files mounted next to the locustfile, e.g. a LoadTestShape or CSV fixture: `{"shape.py": "from locust import LoadTestShape\n..."}`. | `{}` |

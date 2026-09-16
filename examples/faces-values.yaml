@@ -9,8 +9,8 @@
 #
 # The locustfile ships inside the chart, so there is nothing to pass:
 #
-#   helm install faces-loadtest \\
-#     oci://ghcr.io/fragglehunter/charts/locust-load-tester -n faces \\
+#   helm install faces-loadtest \
+#     oci://ghcr.io/fragglehunter/charts/locust-load-tester -n faces \
 #     -f examples/faces-values.yaml
 #
 # Follow it with:

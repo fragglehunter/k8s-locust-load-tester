@@ -5,8 +5,8 @@
 #
 # The locustfile ships inside the chart, so there is nothing to pass:
 #
-#   helm install emojivoto-loadtest \\
-#     oci://ghcr.io/fragglehunter/charts/locust-load-tester -n emojivoto \\
+#   helm install emojivoto-loadtest \
+#     oci://ghcr.io/fragglehunter/charts/locust-load-tester -n emojivoto \
 #     -f examples/emojivoto-values.yaml
 #
 # Follow it with:

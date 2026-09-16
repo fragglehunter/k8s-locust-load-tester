@@ -5,8 +5,8 @@
 #
 # The locustfile ships inside the chart, so there is nothing to pass:
 #
-#   helm install dotnet-app-loadtest \\
-#     oci://ghcr.io/fragglehunter/charts/locust-load-tester \\
+#   helm install dotnet-app-loadtest \
+#     oci://ghcr.io/fragglehunter/charts/locust-load-tester \
 #     -f examples/dotnet-app-values.yaml
 #
 # Follow it with:

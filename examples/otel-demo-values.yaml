@@ -1,0 +1,37 @@
+---
+# CNCF OpenTelemetry Demo ("Astronomy Shop") in the `otel-demo` namespace.
+#
+# Targets `frontend-proxy`, the Envoy edge, not `frontend`: Envoy routes /images/ and
+# /flagservice/ to other backends, so aimed at the frontend every image would 404.
+#
+# Touches every page and every API route — home, product, cart, order confirmation, the
+# 404 page, images, and all ten /api/* routes — with a full checkout funnel behind it.
+#
+# The demo injects faults on purpose via flagd, so a non-zero failure rate once you flip
+# a flag is the demo working as designed. Add locust.exitCodeOnError=0 if that is noise.
+#
+# The locustfile ships inside the chart, so there is nothing to pass:
+#
+#   helm install otel-demo-loadtest \
+#     oci://ghcr.io/fragglehunter/charts/locust-load-tester -n otel-demo \
+#     -f examples/otel-demo-values.yaml
+#
+# Follow it with:
+#   kubectl logs -n otel-demo -f -l app.kubernetes.io/instance=otel-demo-loadtest --tail=100
+
+mode: standalone
+
+locustfile:
+  # Bundled with the chart. `helm show readme` lists every preset.
+  preset: otel-demo
+
+locust:
+  targetHost: http://frontend-proxy:8080
+  users: 40
+  spawnRate: 10
+  runTime: 5m
+  headless: true
+  onlySummary: true
+  csv:
+    enabled: true
+    prefix: /tmp/otel-demo

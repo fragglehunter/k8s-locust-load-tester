@@ -102,6 +102,7 @@ Presets available in this chart:
 | Preset | Targets |
 | --- | --- |
 | `faces` | [Faces](https://github.com/BuoyantIO/faces-demo) — point at the `face` service |
+| `otel-demo` | [OpenTelemetry Demo](https://github.com/open-telemetry/opentelemetry-demo) "Astronomy Shop" — point at `frontend-proxy:8080`. Every page and all ten `/api/*` routes |
 | `emojivoto` | Emojivoto, the Linkerd demo app |
 | `emojivoto-legacy` | The older, more verbose Emojivoto test |
 | `sock-shop` | Sock Shop / microservices-demo |
@@ -400,6 +401,109 @@ you want a clean baseline to measure against.
 
 If you are running the load test from **outside** the `faces` namespace, use the fully
 qualified name instead: `--set locust.targetHost=http://face.faces.svc.cluster.local`.
+
+---
+
+## Recipe: the OpenTelemetry Demo (Astronomy Shop)
+
+The [OpenTelemetry Demo](https://github.com/open-telemetry/opentelemetry-demo) chart sets
+no namespace of its own, so it lands wherever Helm is pointed — `default` unless you say
+otherwise. The upstream docs use **`otel-demo`**, and so does everything below. Install
+the load test into the same namespace and the short service name resolves.
+
+Point it at **`frontend-proxy`** on port **8080**, not at `frontend`. `frontend-proxy` is
+the Envoy edge in front of the whole demo: it routes `/images/` to the image provider and
+`/flagservice/` to flagd, and only the catch-all `/` prefix reaches Next.js. Aimed at
+`frontend` you would 404 every image.
+
+[`otel-demo.py`](charts/locust-load-tester/files/locustfiles/otel-demo.py) is the most
+thorough preset in the chart. It touches **every page** — home, `/product/[productId]`,
+`/cart`, the `/cart/checkout/[orderId]` confirmation page (which needs the whole order
+JSON handed back in `?order=`), the 404 page, product images, the banner and the static
+icons — and **all ten `/api/*` routes**, including the two the upstream generator never
+calls: `DELETE /api/cart` and `GET /api/shipping`. A full funnel runs behind it: pick a
+currency, browse, open a product, add to cart, view the cart, get a shipping quote, place
+the order, load the confirmation.
+
+Smallest thing that works — a 5 minute headless run:
+
+```bash
+helm install otel-demo-loadtest oci://ghcr.io/fragglehunter/charts/locust-load-tester \
+  --namespace otel-demo \
+  --set locust.targetHost=http://frontend-proxy:8080 \
+  --set locust.users=40 \
+  --set locust.spawnRate=10 \
+  --set locust.runTime=5m \
+  --set locustfile.preset=otel-demo
+```
+
+Same thing from the bundled values file, which also turns on CSV output:
+
+```bash
+helm install otel-demo-loadtest oci://ghcr.io/fragglehunter/charts/locust-load-tester \
+  --namespace otel-demo \
+  -f examples/otel-demo-values.yaml
+```
+
+Watch it:
+
+```bash
+kubectl logs -n otel-demo -f -l app.kubernetes.io/instance=otel-demo-loadtest --tail=100
+```
+
+With the web UI instead, so you can drive the ramp by hand while you flip feature flags:
+
+```bash
+helm install otel-demo-ui oci://ghcr.io/fragglehunter/charts/locust-load-tester \
+  --namespace otel-demo \
+  --set locust.targetHost=http://frontend-proxy:8080 \
+  --set locust.headless=false \
+  --set service.enabled=true \
+  --set locustfile.preset=otel-demo
+
+kubectl port-forward -n otel-demo svc/otel-demo-ui-locust-load-tester 8089:8089
+# then open http://127.0.0.1:8089
+```
+
+Enough load to make the demo's 20Mi services sweat, distributed across 4 workers:
+
+```bash
+helm install otel-demo-big oci://ghcr.io/fragglehunter/charts/locust-load-tester \
+  --namespace otel-demo \
+  --set mode=distributed \
+  --set worker.replicaCount=4 \
+  --set locust.targetHost=http://frontend-proxy:8080 \
+  --set locust.users=600 \
+  --set locust.spawnRate=50 \
+  --set locust.runTime=15m \
+  --set locustfile.preset=otel-demo
+```
+
+Clean up:
+
+```bash
+helm uninstall otel-demo-loadtest otel-demo-ui otel-demo-big -n otel-demo
+```
+
+**Expect a non-zero error rate.** The demo exists to be broken: flagd ships sixteen
+fault-injection flags — `paymentFailure`, `productCatalogFailure`, `adFailure`,
+`paymentUnreachable`, `cartFailure`, `failedReadinessProbe` and friends — that turn
+healthy routes into 5xx or 422 on demand. They all default to *off*, so a clean install
+sits near 0%, but flipping one in the `/feature` UI is the entire point of the demo and
+this test will report the result. Two deliberate choices in the locustfile:
+
+- `POST /api/checkout` records a **422** as a success. That is `paymentFailure` declining
+  the card, and Locust counts 422 as a failure by default, which would drown the run in
+  red the instant the flag is on.
+- Injected **500s stay failures**. An `adFailure` 500 on `/api/data` is byte-for-byte
+  identical to a genuinely broken ad service, so masking it would hide real breakage.
+
+The preset also never sends a wrong HTTP method to `/api/currency`, `/api/shipping` or
+`/api/cart`: those three handlers return a status with no body and never terminate the
+response, so the request hangs until your client times out.
+
+Running from **outside** the demo's namespace? Use the fully qualified name:
+`--set locust.targetHost=http://frontend-proxy.otel-demo.svc.cluster.local:8080`.
 
 ---
 

@@ -5,8 +5,8 @@
 #
 # The locustfile ships inside the chart, so there is nothing to pass:
 #
-#   helm install sock-shop-loadtest \\
-#     oci://ghcr.io/fragglehunter/charts/locust-load-tester -n sock-shop \\
+#   helm install sock-shop-loadtest \
+#     oci://ghcr.io/fragglehunter/charts/locust-load-tester -n sock-shop \
 #     -f examples/sock-shop-values.yaml
 #
 # Follow it with:
