@@ -1,7 +1,7 @@
 # locust-load-tester
 
 ![Type: application](https://img.shields.io/badge/type-application-informational)
-![Version: 0.1.1](https://img.shields.io/badge/version-0.1.1-informational)
+![Version: 0.2.0](https://img.shields.io/badge/version-0.2.0-informational)
 ![AppVersion: 2.46.4](https://img.shields.io/badge/appVersion-2.46.4-informational)
 ![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)
 
@@ -23,8 +23,8 @@ script — see the [repository README](../../README.md).
 
 ## Installing
 
-Two values are required: `locust.targetHost`, and either `locustfile.content` or
-`locustfile.existingConfigMap`. The chart fails at render time without them rather than
+Two values are required: `locust.targetHost`, and one of `locustfile.preset`,
+`locustfile.content` or `locustfile.existingConfigMap`. The chart fails at render time without them rather than
 producing a pod that crash-loops.
 
 From the OCI registry:
@@ -32,7 +32,7 @@ From the OCI registry:
 ```bash
 helm install my-test oci://ghcr.io/fragglehunter/charts/locust-load-tester \
   --set locust.targetHost=http://my-service:8080 \
-  --set-file locustfile.content=./locustfile.py
+  --set locustfile.preset=faces
 ```
 
 From the chart repository:
@@ -50,7 +50,7 @@ Pin the chart version in anything automated:
 
 ```bash
 helm install my-test oci://ghcr.io/fragglehunter/charts/locust-load-tester \
-  --version 0.1.1 \
+  --version 0.2.0 \
   -f my-values.yaml
 ```
 
@@ -60,7 +60,7 @@ helm install my-test oci://ghcr.io/fragglehunter/charts/locust-load-tester \
 helm upgrade my-test oci://ghcr.io/fragglehunter/charts/locust-load-tester -f my-values.yaml
 ```
 
-Changing `locustfile.content` (or `locustfile.extraFiles`) changes the `checksum/config`
+Changing `locustfile.preset`, `locustfile.content` or `locustfile.extraFiles` changes the `checksum/config`
 pod annotation, so the pods roll automatically. With `locustfile.existingConfigMap` there
 is no checksum — the contents are not the chart's to hash — so edit-then-restart is
 manual:
@@ -155,6 +155,7 @@ The chart refuses to render, with a message naming the fix, when:
 | Key | Description | Default |
 | --- | --- | --- |
 | `locustfile.name` | Filename mounted into /config and passed to `locust -f`. | `"locustfile.py"` |
+| `locustfile.preset` | Bundled locustfile to run: `faces`, `emojivoto`, `emojivoto-legacy`, `sock-shop`, `dotnet-app`. Lowest precedence of the three. | `""` |
 | `locustfile.content` | Inline locustfile contents. Ignored when `existingConfigMap` is set. Usually supplied with `--set-file locustfile.content=./locustfile.py`. | `""` |
 | `locustfile.existingConfigMap` | Use a ConfigMap you manage yourself instead of rendering one from `content`. | `""` |
 | `locustfile.extraFiles` | Additional files mounted next to the locustfile, e.g. a LoadTestShape or CSV fixture: `{"shape.py": "from locust import LoadTestShape\n..."}`. | `{}` |

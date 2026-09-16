@@ -97,12 +97,25 @@ locust:
   # -- Extra flags appended verbatim to the locust command line.
   extraArgs: []
 
+# The test itself. Three ways to supply it, and when more than one is set the
+# highest of these wins:
+#
+#     existingConfigMap  >  content  >  preset
+#
+# One of them has to resolve to something. With none set the chart refuses to
+# render, rather than starting a pod that crash-loops on a missing file.
 locustfile:
   # -- Filename mounted into /config and passed to `locust -f`.
   name: locustfile.py
-  # -- Inline locustfile contents. Ignored when `existingConfigMap` is set.
+  # -- Bundled locustfile to run, e.g. "faces". See files/locustfiles/ in the chart
+  # for the ones that ship with it. A name that is not there fails at render time,
+  # with the available names in the message.
+  preset: ""
+  # -- Inline locustfile contents, usually supplied with
+  # `--set-file locustfile.content=./locustfile.py`. Wins over `preset`.
   content: ""
-  # -- Use a ConfigMap you manage yourself instead of rendering one from `content`.
+  # -- Use a ConfigMap you manage yourself. Wins over both `content` and `preset`;
+  # the chart then renders no ConfigMap of its own.
   existingConfigMap: ""
   # -- Additional files mounted next to the locustfile, e.g. a LoadTestShape or CSV
   # fixture: `{"shape.py": "from locust import LoadTestShape\n..."}`.

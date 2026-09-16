@@ -1,0 +1,39 @@
+---
+# Running a locustfile of your own instead of one bundled with the chart.
+#
+# Two ways. Either inline it here under locustfile.content, as below, or keep it as a
+# file and pass it at install time, which is usually nicer:
+#
+#   helm install my-loadtest \
+#     oci://ghcr.io/fragglehunter/charts/locust-load-tester \
+#     --set locust.targetHost=http://my-service:8080 \
+#     --set-file locustfile.content=./my-locustfile.py
+#
+# `content` beats `preset`, so setting both here would ignore the preset.
+
+mode: standalone
+
+locustfile:
+  name: locustfile.py
+  content: |
+    from locust import HttpUser, between, task
+
+
+    class MyUser(HttpUser):
+        wait_time = between(0.5, 2.0)
+
+        @task(5)
+        def health(self):
+            self.client.get("/health")
+
+        @task
+        def index(self):
+            self.client.get("/")
+
+locust:
+  targetHost: http://my-service:8080
+  users: 20
+  spawnRate: 5
+  runTime: 5m
+  headless: true
+  onlySummary: true

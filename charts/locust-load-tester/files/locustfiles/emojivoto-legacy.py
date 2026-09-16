@@ -1,3 +1,13 @@
+"""Emojivoto load test — the original, verbose variant.
+
+Kept for reference and reproducibility. **emojivoto.py is the maintained one**:
+it does the same work with a random choice out of the emoji list instead of one
+hard-coded request per emoji, so prefer `locustfile.preset: emojivoto` unless you
+specifically want this fixed, exhaustive request sequence.
+
+    locust.targetHost: http://web-svc.emojivoto.svc.cluster.local
+"""
+
 import base64
 
 import requests

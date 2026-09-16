@@ -40,7 +40,7 @@ Two required values: where to send the traffic, and the locustfile to send it wi
 ```bash
 helm install dotnet-loadtest oci://ghcr.io/fragglehunter/charts/locust-load-tester \
   --set locust.targetHost=http://dotnet-8-app:5000 \
-  --set-file locustfile.content=./locustfile-dotnet-app.py
+  --set locustfile.preset=dotnet-app
 ```
 
 No `helm repo add` needed — OCI charts are pulled straight from GHCR.
@@ -53,7 +53,7 @@ helm repo update
 
 helm install dotnet-loadtest locust-load-tester/locust-load-tester \
   --set locust.targetHost=http://dotnet-8-app:5000 \
-  --set-file locustfile.content=./locustfile-dotnet-app.py
+  --set locustfile.preset=dotnet-app
 ```
 
 ### Watch it run
@@ -68,7 +68,7 @@ kubectl logs -f -l app.kubernetes.io/instance=dotnet-loadtest --tail=100
 helm uninstall dotnet-loadtest
 ```
 
-`--set-file locustfile.content=./your-test.py` is the ergonomic win over the old
+`--set locustfile.preset=<name>` is the ergonomic win over the old
 `kubectl create configmap --from-file=...` dance: the file goes in as a chart value, so
 the ConfigMap, the mount, the env vars and a `checksum/config` pod annotation are all
 derived from it. Edit the file, `helm upgrade`, and the pods roll on their own.
@@ -87,7 +87,34 @@ helm install dotnet-loadtest oci://ghcr.io/fragglehunter/charts/locust-load-test
 
 Three ways in, pick one.
 
-### 1. Inline from a file on disk — `--set-file` (recommended)
+### 1. A bundled preset — `--set locustfile.preset=<name>` (recommended)
+
+The chart ships the example tests inside it, so there is no file to pass:
+
+```bash
+helm install my-test oci://ghcr.io/fragglehunter/charts/locust-load-tester \
+  --set locust.targetHost=http://my-service:8080 \
+  --set locustfile.preset=faces
+```
+
+Presets available in this chart:
+
+| Preset | Targets |
+| --- | --- |
+| `faces` | [Faces](https://github.com/BuoyantIO/faces-demo) — point at the `face` service |
+| `emojivoto` | Emojivoto, the Linkerd demo app |
+| `emojivoto-legacy` | The older, more verbose Emojivoto test |
+| `sock-shop` | Sock Shop / microservices-demo |
+| `dotnet-app` | A plain `/test` + `/health` service |
+
+A name that is not bundled fails at render time and lists the ones that are, so a
+typo never reaches the cluster. To see them for any released chart version:
+
+```bash
+helm show readme oci://ghcr.io/fragglehunter/charts/locust-load-tester
+```
+
+### 2. Your own file — `--set-file`
 
 ```bash
 helm install my-test oci://ghcr.io/fragglehunter/charts/locust-load-tester \
@@ -108,7 +135,7 @@ helm install my-test oci://ghcr.io/fragglehunter/charts/locust-load-tester \
 The `\.` is not a typo — Helm splits `--set` keys on `.`, so the dot in a filename has
 to be escaped. A values file (below) avoids the whole problem.
 
-### 2. In a values file
+### 3. In a values file
 
 Better once the test outgrows a one-liner, because the values file is reviewable and
 version controlled:
@@ -140,7 +167,7 @@ locustfile:
 helm install my-test oci://ghcr.io/fragglehunter/charts/locust-load-tester -f my-values.yaml
 ```
 
-### 3. A ConfigMap you already manage
+### 4. A ConfigMap you already manage
 
 If the locustfile is produced by something else — a GitOps pipeline, another chart, a
 `kubectl create configmap` you are not ready to retire — point the chart at it:
@@ -304,7 +331,7 @@ Point it at the **`face`** service, not `faces-gui`. `face` is the edge service 
 browser actually hammers, and it fans out to `smiley` and `color` behind it, so this
 exercises the whole chain instead of just serving static HTML. The GUI renders a grid
 whose small centre block requests `/center/` and whose every other cell requests
-`/edge/`, which is why [`locustfile-faces.py`](locustfile-faces.py) weights them 8:1.
+`/edge/`, which is why [`faces.py`](charts/locust-load-tester/files/locustfiles/faces.py) weights them 8:1.
 
 Smallest thing that works — a 5 minute headless run:
 
@@ -315,7 +342,7 @@ helm install faces-loadtest oci://ghcr.io/fragglehunter/charts/locust-load-teste
   --set locust.users=40 \
   --set locust.spawnRate=10 \
   --set locust.runTime=5m \
-  --set-file locustfile.content=./locustfile-faces.py
+  --set locustfile.preset=faces
 ```
 
 Same thing from the bundled values file, which also turns on CSV output:
@@ -340,7 +367,7 @@ helm install faces-ui oci://ghcr.io/fragglehunter/charts/locust-load-tester \
   --set locust.targetHost=http://face \
   --set locust.headless=false \
   --set service.enabled=true \
-  --set-file locustfile.content=./locustfile-faces.py
+  --set locustfile.preset=faces
 
 kubectl port-forward -n faces svc/faces-ui-locust-load-tester 8089:8089
 # then open http://127.0.0.1:8089
@@ -357,7 +384,7 @@ helm install faces-big oci://ghcr.io/fragglehunter/charts/locust-load-tester \
   --set locust.users=800 \
   --set locust.spawnRate=50 \
   --set locust.runTime=15m \
-  --set-file locustfile.content=./locustfile-faces.py
+  --set locustfile.preset=faces
 ```
 
 Clean up:
@@ -465,7 +492,7 @@ variables — the same contract the chart writes to:
 docker run --rm \
   -v "$PWD:/config:ro" \
   -e TARGET_HOST=http://host.docker.internal:8080 \
-  -e LOCUST_FILE=locustfile-dotnet-app.py \
+  -e LOCUST_FILE=dotnet-app.py \
   -e USERS=10 -e SPAWN_RATE=5 -e RUN_TIME=1m \
   locust-load-tester:dev
 ```
@@ -481,7 +508,7 @@ The script looks for its locustfile in `/config` — that is where the chart mou
 ConfigMap — so outside the container point it somewhere real:
 
 ```bash
-LOCUST_CONFIG_DIR=. LOCUST_FILE=locustfile-dotnet-app.py \
+LOCUST_CONFIG_DIR=charts/locust-load-tester/files/locustfiles LOCUST_FILE=dotnet-app.py \
   ./runLocust.sh -h http://localhost:8080 -c 10
 ```
 
@@ -532,7 +559,7 @@ script could do is a value:
 | `-d dotnet-loadtest` | the Helm release name: `helm install dotnet-loadtest ...` |
 | `-c locust-loadtest-cm` | not needed — the ConfigMap is rendered and named from the release. Use `locustfile.existingConfigMap` to bring your own |
 | `-i IMAGE` | `image.registry`, `image.repository`, `image.tag` |
-| `-f ./locustfile.py` | `--set-file locustfile.content=./locustfile.py` |
+| `-f ./locustfile.py` | `--set locustfile.preset=<name>` for a bundled test, or `--set-file locustfile.content=./locustfile.py` for your own |
 | `-h http://dotnet-8-app:5000` | `locust.targetHost=http://dotnet-8-app:5000` |
 | `-r 5` | `locust.spawnRate=5` |
 | `-t 5m` | `locust.runTime=5m` (see below) |
@@ -578,7 +605,7 @@ create-locust-loadtest-deploy.sh deprecated pre-chart script, kept for compatibi
 charts/locust-load-tester/       the Helm chart
   charts/locust-load-tester/ci/  install permutations exercised by CI
 examples/                        installable values files for the locustfiles below
-locustfile-*.py                  example tests: dotnet app, emojivoto, sock-shop, faces
+  charts/.../files/locustfiles/  the bundled tests, selectable with locustfile.preset
 ```
 
 `charts/locust-load-tester/ci/*-values.yaml` are install permutations — standalone,

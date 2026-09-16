@@ -145,8 +145,20 @@ and then does nothing useful.
 {{- if not .Values.locust.targetHost -}}
 {{- fail "locust.targetHost is required, e.g. --set locust.targetHost=http://my-service:8080" -}}
 {{- end -}}
-{{- if and (not .Values.locustfile.existingConfigMap) (not .Values.locustfile.content) -}}
-{{- fail "set locustfile.content (e.g. --set-file locustfile.content=./locustfile.py) or locustfile.existingConfigMap" -}}
+{{- /* Bundled presets, discovered rather than listed, so this can never go stale:
+       drop a .py into files/locustfiles/ and it becomes selectable by its stem. */ -}}
+{{- $presets := list -}}
+{{- range $path, $_ := .Files.Glob "files/locustfiles/*.py" -}}
+{{- $presets = append $presets (base $path | trimSuffix ".py") -}}
+{{- end -}}
+{{- $presets = sortAlpha $presets -}}
+{{- $preset := .Values.locustfile.preset | toString -}}
+{{- if $preset -}}
+{{- if not (has $preset $presets) -}}
+{{- fail (printf "locustfile.preset %q is not bundled with this chart.\nAvailable presets: %s.\nTo run a locustfile of your own instead, use --set-file locustfile.content=./locustfile.py" $preset (join ", " $presets)) -}}
+{{- end -}}
+{{- else if and (not .Values.locustfile.existingConfigMap) (not .Values.locustfile.content) -}}
+{{- fail (printf "no locustfile to run: set locustfile.preset to one of the bundled tests (%s), or locustfile.content (e.g. --set-file locustfile.content=./locustfile.py), or locustfile.existingConfigMap" (join ", " $presets)) -}}
 {{- end -}}
 {{- if and (eq .Values.mode "distributed") (ne .Values.workload.kind "Deployment") -}}
 {{- fail "mode: distributed requires workload.kind: Deployment" -}}

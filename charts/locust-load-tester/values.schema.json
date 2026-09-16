@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "locust-load-tester values",
-  "description": "Values for the locust-load-tester chart. locust.targetHost and one of locustfile.content / locustfile.existingConfigMap are mandatory in practice, but they are validated by the chart's own templates so the failure message can explain how to set them.",
+  "description": "Values for the locust-load-tester chart. locust.targetHost and one of locustfile.preset / locustfile.content / locustfile.existingConfigMap are mandatory in practice, but they are validated by the chart's own templates so the failure message can explain how to set them and list the bundled presets.",
   "type": "object",
   "properties": {
     "global": {
@@ -302,15 +302,22 @@
           "type": "string",
           "minLength": 1
         },
+        "preset": {
+          "description": "Bundled locustfile to run, by name without the .py, e.g. \"faces\". The chart lists what is available when the name is not one of them. Lowest precedence: content and existingConfigMap both win over it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "content": {
-          "description": "Inline locustfile contents. Ignored when existingConfigMap is set.",
+          "description": "Inline locustfile contents. Wins over preset; ignored when existingConfigMap is set.",
           "type": [
             "string",
             "null"
           ]
         },
         "existingConfigMap": {
-          "description": "Use a ConfigMap you manage yourself instead of rendering one from content.",
+          "description": "Use a ConfigMap you manage yourself instead of rendering one from content or preset.",
           "type": [
             "string",
             "null"

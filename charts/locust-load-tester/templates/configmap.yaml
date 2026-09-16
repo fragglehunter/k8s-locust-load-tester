@@ -1,4 +1,11 @@
 {{- if not .Values.locustfile.existingConfigMap }}
+{{- /* Precedence: existingConfigMap (handled above, no ConfigMap at all) > content
+       > preset. .Files.Get returns "" for a name that is not there; validateValues
+       has already failed with the list of presets by the time we get here. */}}
+{{- $content := .Values.locustfile.content -}}
+{{- if not $content -}}
+{{- $content = .Files.Get (printf "files/locustfiles/%s.py" .Values.locustfile.preset) -}}
+{{- end -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -13,7 +20,7 @@ metadata:
 data:
   {{- /* Literal block scalars: python indentation has to survive verbatim. */}}
   {{ .Values.locustfile.name | quote }}: |-
-    {{- .Values.locustfile.content | toString | nindent 4 }}
+    {{- $content | toString | nindent 4 }}
   {{- range $name, $content := .Values.locustfile.extraFiles }}
   {{ $name | quote }}: |-
     {{- $content | toString | nindent 4 }}
