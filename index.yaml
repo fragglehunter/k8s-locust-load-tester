@@ -5,6 +5,36 @@ entries:
       artifacthub.io/category: monitoring-logging
       artifacthub.io/changes: |
         - kind: added
+          description: "locustfile.preset=otel-demo: an exhaustive test for the OpenTelemetry Demo (Astronomy Shop) covering every page and all ten /api/* routes"
+      artifacthub.io/license: Apache-2.0
+    apiVersion: v2
+    appVersion: 2.46.4
+    created: "2026-09-16T20:24:11.950528808Z"
+    description: Run a Locust load test in Kubernetes against any target service,
+      with the locustfile supplied as chart values or an existing ConfigMap.
+    digest: 15d29bb326c8f74d59b4f27279138816649e8ab634cf09a46fb5f78871ac029d
+    home: https://github.com/fragglehunter/k8s-locust-load-tester
+    icon: https://raw.githubusercontent.com/locustio/locust/master/locust/webui/dist/assets/logo.png
+    keywords:
+    - locust
+    - load-testing
+    - performance
+    - benchmark
+    - stress-testing
+    maintainers:
+    - name: Phil Henderson
+      url: https://github.com/fragglehunter
+    name: locust-load-tester
+    sources:
+    - https://github.com/fragglehunter/k8s-locust-load-tester
+    type: application
+    urls:
+    - https://github.com/fragglehunter/k8s-locust-load-tester/releases/download/locust-load-tester-0.3.0/locust-load-tester-0.3.0.tgz
+    version: 0.3.0
+  - annotations:
+      artifacthub.io/category: monitoring-logging
+      artifacthub.io/changes: |
+        - kind: added
           description: "locustfile.preset: run a locustfile bundled with the chart instead of passing a .py file"
         - kind: changed
           description: The example locustfiles now ship inside the chart under files/locustfiles/
@@ -63,4 +93,4 @@ entries:
     urls:
     - https://github.com/fragglehunter/k8s-locust-load-tester/releases/download/locust-load-tester-0.1.1/locust-load-tester-0.1.1.tgz
     version: 0.1.1
-generated: "2026-09-16T20:09:35.967177714Z"
+generated: "2026-09-16T20:24:11.95053854Z"
